@@ -128,3 +128,64 @@ func TestApp_FileViewers_LimitsAndPaths(t *testing.T) {
 		t.Fatalf("symlink %+v: %v", file, err)
 	}
 }
+
+func TestApp_TreeRenameAndTogglePreservesWorkingFiles(t *testing.T) {
+	a, r, dir := setupCommitApp(t)
+	ctx := context.Background()
+	writeCommitFile(t, dir, "old name.txt", "unchanged content\n")
+	writeCommitFile(t, dir, "unrelated.txt", "keep\n")
+	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(dir, "old name.txt"), filepath.Join(dir, "new ação.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.StageFiles(ctx, dir, []string{"old name.txt", "new ação.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := a.GetWorkspaceTree(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := findTreeNode(tree.Root, "new ação.txt")
+	if node == nil || node.Status.Staged != "R" || node.Status.OrigPath != "old name.txt" || tree.Changes.Summary().Total != 1 || tree.Root.FileCount() != 2 {
+		t.Fatalf("rename metadata: %+v", node)
+	}
+	if err := a.ToggleStage(ctx, dir, "new ação.txt"); err != nil {
+		t.Fatal(err)
+	}
+	staged, err := r.Exec(ctx, dir, "diff", "--cached", "--name-only")
+	if err != nil || staged != "" {
+		t.Fatalf("rename unstage left partial index: %q, %v", staged, err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "new ação.txt"))
+	if err != nil || string(data) != "unchanged content\n" {
+		t.Fatal("rename unstage changed the working file")
+	}
+}
+
+func TestApp_ReviewedCommitRejectsChangedIndex(t *testing.T) {
+	a, r, dir := setupCommitApp(t)
+	ctx := context.Background()
+	writeCommitFile(t, dir, "file.txt", "reviewed\n")
+	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
+		t.Fatal(err)
+	}
+	reviewed, err := a.GetCommitChanges(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCommitFile(t, dir, "file.txt", "not reviewed\n")
+	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CreateReviewedCommit(ctx, dir, "fix: review", reviewed.StagedDiff); err == nil || !strings.Contains(err.Error(), "stage mudou") {
+		t.Fatalf("changed index accepted: %v", err)
+	}
+	if _, err := r.RevParseHead(ctx, dir); err == nil {
+		t.Fatal("unreviewed commit created")
+	}
+}

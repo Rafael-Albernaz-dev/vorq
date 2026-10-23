@@ -66,3 +66,21 @@ func TestCommitProposal_Message(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
 }
+
+func TestChangeSet_SummaryCountsUniquePaths(t *testing.T) {
+	cs := &domain.ChangeSet{Files: []domain.FileStatus{
+		{Path: "partial.go", Staged: "M", Unstaged: "M"},
+		{Path: "partial.go", Staged: "M", Unstaged: " "},
+		{Path: "new.txt", Staged: "?", Unstaged: "?"},
+		{Path: "conflict.go", Staged: "U", Unstaged: "U"},
+		{Path: "clean.go", Staged: " ", Unstaged: " "},
+	}}
+	got := cs.Summary()
+	if got.Total != 3 || got.Staged != 1 || got.Unstaged != 1 || got.Untracked != 1 || got.Conflicts != 1 || got.Both != 1 {
+		t.Fatalf("summary %+v", got)
+	}
+	root := &domain.TreeNode{IsDir: true, Children: []*domain.TreeNode{{Path: "clean.go"}, {Name: "src", IsDir: true, Children: []*domain.TreeNode{{Path: "src/file.go"}}}}}
+	if root.FileCount() != 2 {
+		t.Fatal("directories counted as files")
+	}
+}

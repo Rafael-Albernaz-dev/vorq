@@ -14,14 +14,13 @@ import (
 )
 
 // GetCommitChanges reads the current worktree directly, including individual
-// untracked files. Renames are expressed as deletion/addition so every stage
-// selection remains a literal, unambiguous path, independent of rename heuristics.
+// untracked files and native rename metadata.
 func (a *App) GetCommitChanges(ctx context.Context, currentDir string) (*domain.ChangeSet, error) {
 	proj, err := a.ResolveProject(ctx, currentDir)
 	if err != nil {
 		return nil, err
 	}
-	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
+	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames")
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +227,18 @@ func (a *App) previewUntracked(ctx context.Context, dir, base, path string) (str
 		return "", nil
 	}
 	return "M", nil
+}
+
+// CreateReviewedCommit refuses an index that changed since the user's review.
+func (a *App) CreateReviewedCommit(ctx context.Context, currentDir, message, expectedDiff string) (*domain.CommitResult, error) {
+	cs, err := a.GetCommitChanges(ctx, currentDir)
+	if err != nil {
+		return nil, err
+	}
+	if cs.StagedDiff != expectedDiff {
+		return nil, fmt.Errorf("o stage mudou após a revisão; revise os arquivos e confirme novamente")
+	}
+	return a.CreateCommit(ctx, currentDir, message)
 }
 
 // CreateCommit validates the index and delegates hooks/signing to native Git.

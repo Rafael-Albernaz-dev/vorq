@@ -46,6 +46,46 @@ type ChangeSet struct {
 	UnstagedDiff  string       `json:"unstaged_diff,omitempty"`
 }
 
+// ChangeSummary counts unique changed paths. Overlapping index/worktree states
+// remain visible in their categories without inflating the union total.
+type ChangeSummary struct{ Total, Staged, Unstaged, Untracked, Conflicts, Both int }
+
+func (c *ChangeSet) Summary() ChangeSummary {
+	type flags struct{ staged, worktree, new, conflict bool }
+	paths := map[string]flags{}
+	for _, f := range c.Files {
+		if f.Path == "" || !(f.IsStaged() || f.IsUnstaged() || f.IsUntracked() || f.IsConflicted()) {
+			continue
+		}
+		p := paths[f.Path]
+		p.conflict = p.conflict || f.IsConflicted()
+		p.staged = p.staged || f.IsStaged()
+		p.worktree = p.worktree || f.IsUnstaged()
+		p.new = p.new || f.IsUntracked()
+		paths[f.Path] = p
+	}
+	s := ChangeSummary{Total: len(paths)}
+	for _, p := range paths {
+		if p.conflict {
+			s.Conflicts++
+			continue
+		}
+		if p.new {
+			s.Untracked++
+		}
+		if p.staged {
+			s.Staged++
+		}
+		if p.worktree {
+			s.Unstaged++
+		}
+		if p.staged && p.worktree {
+			s.Both++
+		}
+	}
+	return s
+}
+
 // IsClean returns true if there are no staged, unstaged or untracked modifications.
 func (c *ChangeSet) IsClean() bool {
 	return len(c.Files) == 0
@@ -158,6 +198,18 @@ type TreeNode struct {
 	UnstagedCount  int         `json:"unstaged_count"`
 	UntrackedCount int         `json:"untracked_count"`
 	DeletedCount   int         `json:"deleted_count"`
+}
+
+// FileCount excludes directories and includes the complete repository inventory.
+func (n *TreeNode) FileCount() int {
+	if !n.IsDir {
+		return 1
+	}
+	count := 0
+	for _, child := range n.Children {
+		count += child.FileCount()
+	}
+	return count
 }
 
 type WorkspaceTree struct {

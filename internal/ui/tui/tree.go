@@ -1,7 +1,9 @@
 package tui
 
 import (
-	"path/filepath"
+	"fmt"
+	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -11,8 +13,76 @@ import (
 )
 
 type treeRow struct {
-	node  *domain.TreeNode
-	depth int
+	node    *domain.TreeNode
+	depth   int
+	group   string
+	heading string
+}
+type treePosition struct {
+	path, group      string
+	selected, offset int
+}
+
+func (m *Model) rememberTree() {
+	p := treePosition{selected: m.selected, offset: m.treeOffset}
+	if m.selected >= 0 && m.selected < len(m.rows) {
+		row := m.rows[m.selected]
+		p.group = row.group
+		if row.node != nil {
+			p.path = row.node.Path
+		}
+	}
+	m.positions[m.activeTab] = p
+}
+
+func (m *Model) switchTree(tab string) {
+	if m.activeTab == tab {
+		return
+	}
+	m.rememberTree()
+	m.activeTab = tab
+	p := m.positions[tab]
+	if p.path == "" {
+		p = m.positions[otherTree(tab)]
+	}
+	if tab == "repositorio" {
+		for parent := path.Dir(p.path); parent != "." && parent != ""; parent = path.Dir(parent) {
+			m.expanded["/"+parent] = true
+		}
+	}
+	m.rebuildTree()
+	m.selected = p.selected
+	m.treeOffset = p.offset
+	m.restoreSelection(p)
+}
+func otherTree(tab string) string {
+	if tab == "alteracoes" {
+		return "repositorio"
+	}
+	return "alteracoes"
+}
+
+func (m *Model) restoreSelection(p treePosition) {
+	found := -1
+	for i, row := range m.rows {
+		if row.node != nil && row.node.Path == p.path {
+			if found < 0 {
+				found = i
+			}
+			if row.group == p.group {
+				found = i
+				break
+			}
+		}
+	}
+	if found >= 0 {
+		m.selected = found
+	}
+	m.selected = min(max(0, m.selected), max(0, len(m.rows)-1))
+	if len(m.rows) > 0 && m.rows[m.selected].node == nil {
+		m.moveTree(1)
+	}
+	m.keepTreeVisible()
 }
 
 func (m *Model) rebuildTree() {
@@ -20,20 +90,83 @@ func (m *Model) rebuildTree() {
 	if m.studio == nil {
 		return
 	}
-	var walk func(*domain.TreeNode, int)
-	walk = func(node *domain.TreeNode, depth int) {
-		m.rows = append(m.rows, treeRow{node: node, depth: depth})
-		if node.IsDir && m.expanded[node.Path] {
+	var walk func(*domain.TreeNode, int, string)
+	walk = func(node *domain.TreeNode, depth int, group string) {
+		m.rows = append(m.rows, treeRow{node: node, depth: depth, group: group})
+		if node.IsDir && m.expanded[group+"/"+node.Path] {
 			for _, child := range node.Children {
-				walk(child, depth+1)
+				walk(child, depth+1, group)
 			}
 		}
 	}
-	for _, child := range m.studio.Root.Children {
-		walk(child, 0)
+	if m.activeTab == "repositorio" {
+		for _, node := range m.studio.Root.Children {
+			walk(node, 0, "")
+		}
+	} else {
+		groups := []struct {
+			key, title string
+			files      []domain.FileStatus
+		}{{key: "stage", title: "No stage"}, {key: "work", title: "Fora do stage"}, {key: "new", title: "Novos"}, {key: "conflict", title: "Conflitos"}}
+		for _, f := range m.studio.Changes.Files {
+			if f.IsConflicted() {
+				groups[3].files = append(groups[3].files, f)
+				continue
+			}
+			if f.IsStaged() {
+				groups[0].files = append(groups[0].files, f)
+			}
+			if f.IsUnstaged() {
+				groups[1].files = append(groups[1].files, f)
+			}
+			if f.IsUntracked() {
+				groups[2].files = append(groups[2].files, f)
+			}
+		}
+		for _, group := range groups {
+			if len(group.files) == 0 {
+				continue
+			}
+			m.rows = append(m.rows, treeRow{group: group.key, heading: fmt.Sprintf("%s  %d", group.title, len(group.files))})
+			root := &domain.TreeNode{IsDir: true}
+			nodes := map[string]*domain.TreeNode{"": root}
+			for _, f := range group.files {
+				parent := root
+				prefix := ""
+				parts := strings.Split(f.Path, "/")
+				for i, part := range parts {
+					prefix = path.Join(prefix, part)
+					node := nodes[prefix]
+					if node == nil {
+						node = &domain.TreeNode{Name: part, Path: prefix, IsDir: i < len(parts)-1}
+						nodes[prefix] = node
+						parent.Children = append(parent.Children, node)
+					}
+					if node.IsDir {
+						key := group.key + "/" + prefix
+						if _, ok := m.expanded[key]; !ok {
+							m.expanded[key] = true
+						}
+					}
+					parent = node
+				}
+				parent.Status = f
+			}
+			for _, node := range nodes {
+				sort.Slice(node.Children, func(i, j int) bool {
+					a, b := node.Children[i], node.Children[j]
+					if a.IsDir != b.IsDir {
+						return a.IsDir
+					}
+					return a.Name < b.Name
+				})
+			}
+			for _, node := range root.Children {
+				walk(node, 0, group.key)
+			}
+		}
 	}
-	m.selected = min(m.selected, max(0, len(m.rows)-1))
-	m.keepTreeVisible()
+	m.restoreSelection(treePosition{})
 }
 
 func (m *Model) selectedNode() *domain.TreeNode {
@@ -42,7 +175,12 @@ func (m *Model) selectedNode() *domain.TreeNode {
 	}
 	return nil
 }
-
+func (m *Model) expandedKey() string {
+	if m.selected >= 0 && m.selected < len(m.rows) {
+		return m.rows[m.selected].group + "/" + m.rows[m.selected].node.Path
+	}
+	return ""
+}
 func (m *Model) keepTreeVisible() {
 	h := m.bodyHeight()
 	if m.selected < m.treeOffset {
@@ -53,12 +191,24 @@ func (m *Model) keepTreeVisible() {
 	}
 	m.treeOffset = min(max(0, m.treeOffset), max(0, len(m.rows)-h))
 }
-
 func (m *Model) moveTree(delta int) {
-	m.selected = min(max(0, m.selected+delta), max(0, len(m.rows)-1))
+	if len(m.rows) == 0 {
+		return
+	}
+	index := min(max(0, m.selected+delta), len(m.rows)-1)
+	step := 1
+	if delta < 0 {
+		step = -1
+	}
+	for index >= 0 && index < len(m.rows) && m.rows[index].node == nil {
+		index += step
+	}
+	if index < 0 || index >= len(m.rows) {
+		return
+	}
+	m.selected = index
 	m.keepTreeVisible()
 }
-
 func displayName(name string) string {
 	if strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return strconv.QuoteToGraphic(name)
@@ -75,82 +225,112 @@ func fileIcon(node *domain.TreeNode, open, nerd bool) string {
 			return ""
 		}
 		if open {
-			return "▾"
+			return "▾ [DIR]"
 		}
-		return "▸"
+		return "▸ [DIR]"
 	}
+	ext := strings.ToLower(path.Ext(node.Name))
+	env := strings.HasPrefix(node.Name, ".env")
 	if nerd {
-		if strings.HasPrefix(node.Name, ".env") {
+		if env {
 			return "󰒓"
 		}
-		switch strings.ToLower(filepath.Ext(node.Name)) {
+		switch ext {
 		case ".go":
 			return ""
 		case ".md":
 			return ""
-		case ".json", ".yml", ".yaml", ".toml", ".env":
+		case ".json", ".yaml", ".yml", ".toml":
 			return "󰒓"
 		}
 		return ""
 	}
-	if strings.HasPrefix(node.Name, ".env") {
-		return "[env]"
+	if env {
+		return "[ENV]"
 	}
-	switch strings.ToLower(filepath.Ext(node.Name)) {
+	switch ext {
 	case ".go":
-		return "[go]"
+		return "[GO]"
 	case ".md":
-		return "[md]"
-	case ".json", ".yml", ".yaml", ".toml", ".ini":
-		return "[cfg]"
+		return "[MD]"
+	case ".json":
+		return "[JSON]"
+	case ".yaml", ".yml", ".toml", ".ini":
+		return "[CFG]"
 	}
-	return "·"
+	return "[FILE]"
 }
-
-func badges(node *domain.TreeNode) string {
-	var badges []string
-	if node.Status.IsConflicted() {
-		badges = append(badges, redStyle.Render("!"))
+func statusBadge(f domain.FileStatus) string {
+	if f.IsConflicted() {
+		return redStyle.Render("U")
 	}
-	if node.Status.IsStaged() || node.StagedCount > 0 {
-		badges = append(badges, greenStyle.Render("+"))
+	if f.IsDeleted() {
+		return redStyle.Render("D")
 	}
-	if node.Status.IsUnstaged() || node.UnstagedCount > 0 {
-		badges = append(badges, yellowStyle.Render("~"))
+	if f.Staged == "R" || f.Unstaged == "R" {
+		return purpleStyle.Render("R")
 	}
-	if node.Status.IsUntracked() || node.UntrackedCount > 0 {
-		badges = append(badges, cyanStyle.Render("?"))
+	if f.IsUntracked() {
+		return cyanStyle.Render("?")
 	}
-	if node.Status.IsDeleted() || node.DeletedCount > 0 {
-		badges = append(badges, redStyle.Render("-"))
+	if f.Unstaged == "M" || f.Staged == "M" || f.Unstaged == "T" || f.Staged == "T" {
+		return yellowStyle.Render("M")
 	}
-	return strings.Join(badges, "")
+	if f.IsStaged() {
+		return greenStyle.Render("A")
+	}
+	return dimStyle.Render("·")
 }
-
+func stageMarker(f domain.FileStatus) string {
+	if f.IsStaged() {
+		if f.IsUnstaged() || f.IsUntracked() {
+			return yellowStyle.Render("[-]")
+		}
+		return greenStyle.Render("[x]")
+	}
+	if f.IsUnstaged() || f.IsUntracked() || f.IsConflicted() {
+		return dimStyle.Render("[ ]")
+	}
+	return "   "
+}
 func (m *Model) treeView(width int) string {
 	lines := make([]string, m.bodyHeight())
 	for i := range lines {
 		index := m.treeOffset + i
 		if index >= len(m.rows) {
-			lines[i] = fit("", width)
+			text := ""
+			if len(m.rows) == 0 && i == 1 {
+				if m.activeTab == "alteracoes" {
+					text = "✓ Repositório limpo"
+				} else {
+					text = "Repositório sem arquivos"
+				}
+			}
+			lines[i] = surface(text, width, ColorPanel)
 			continue
 		}
 		row := m.rows[index]
-		marker := "  "
-		if index == m.selected {
-			marker = "› "
+		if row.node == nil {
+			lines[i] = surface(accentStyle.Render(" "+row.heading), width, ColorRaised)
+			continue
 		}
-		label := marker + strings.Repeat("  ", row.depth) + fileIcon(row.node, m.expanded[row.node.Path], m.nerdFonts) + " " + displayName(row.node.Name)
-		badge := badges(row.node)
+		marker := " "
+		if index == m.selected {
+			marker = "›"
+		}
+		node := row.node
+		icon := fileIcon(node, m.expanded[row.group+"/"+node.Path], m.nerdFonts)
+		label := marker + strings.Repeat(" ", row.depth) + " " + cyanStyle.Render(icon) + " " + displayName(node.Name)
+		badge := ""
+		if !node.IsDir {
+			badge = stageMarker(node.Status) + " " + statusBadge(node.Status)
+		}
 		label = fit(label, max(1, width-lipgloss.Width(badge)-1)) + " " + badge
+		bg := ColorPanel
 		if index == m.selected {
-			bg := lipgloss.Color("#252D42")
-			if m.focus == "tree" {
-				bg = lipgloss.Color("#343052")
-			}
-			label = lipgloss.NewStyle().Background(bg).Foreground(ink).Render(fit(label, width))
+			bg = ColorSelection
 		}
-		lines[i] = fit(label, width)
+		lines[i] = surface(label, width, bg)
 	}
 	return strings.Join(lines, "\n")
 }

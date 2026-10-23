@@ -40,12 +40,11 @@ func ParseStatus(output string, wsPath string, branch string) (*domain.ChangeSet
 			path = entry[2:]
 		}
 
-		// Handle renames or copies (where Git outputs old path followed by new path in next NUL token)
+		// Porcelain -z puts the destination first, then the original path.
 		var origPath string
 		if staged == "R" || staged == "C" || unstaged == "R" || unstaged == "C" {
 			if i+1 < len(tokens) && tokens[i+1] != "" {
-				origPath = path
-				path = tokens[i+1]
+				origPath = tokens[i+1]
 				i++ // consume the extra token
 			}
 		}

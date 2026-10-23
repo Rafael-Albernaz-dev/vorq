@@ -24,7 +24,7 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 	if err != nil {
 		return nil, err
 	}
-	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
+	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames")
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (a *App) ToggleStage(ctx context.Context, currentDir, path string) error {
 	if err != nil {
 		return err
 	}
-	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--literal-pathspecs", "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--", path)
+	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames")
 	if err != nil {
 		return err
 	}
@@ -236,10 +236,14 @@ func (a *App) ToggleStage(ctx context.Context, currentDir, path string) error {
 	}
 	for _, f := range changes.Files {
 		if f.Path == path {
-			if f.IsStaged() {
-				return a.UnstageFiles(ctx, proj.RootPath, []string{"./" + path})
+			paths := []string{"./" + path}
+			if f.OrigPath != "" {
+				paths = append(paths, "./"+f.OrigPath)
 			}
-			return a.StageFiles(ctx, proj.RootPath, []string{"./" + path})
+			if f.IsStaged() {
+				return a.UnstageFiles(ctx, proj.RootPath, paths)
+			}
+			return a.StageFiles(ctx, proj.RootPath, paths)
 		}
 	}
 	return fmt.Errorf("arquivo sem alterações para stage: %q", path)

@@ -17,7 +17,7 @@ func TestParseStatus(t *testing.T) {
 		" M modified_unstaged.go\x00" +
 		"MM staged_and_modified.go\x00" +
 		"?? untracked_file.txt\x00" +
-		"R  old_name.go\x00new_name.go\x00"
+		"R  new_name.go\x00old_name.go\x00"
 
 	cs, err := git.ParseStatus(raw, "/path/to/ws", "main")
 	if err != nil {

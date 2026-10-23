@@ -30,6 +30,7 @@ type Service interface {
 	ProposeCommit(ctx context.Context, currentDir string, commitType string) (*domain.CommitProposal, error)
 	PreviewCommit(ctx context.Context, currentDir, commitType string, all bool) (*domain.ChangeSet, *domain.CommitProposal, error)
 	CreateCommit(ctx context.Context, currentDir string, message string) (*domain.CommitResult, error)
+	CreateReviewedCommit(ctx context.Context, currentDir, message, expectedDiff string) (*domain.CommitResult, error)
 	GetPushTarget(ctx context.Context, currentDir string) (*domain.PushTarget, error)
 	PushChanges(ctx context.Context, currentDir string, opts domain.PushOptions) (*domain.PushResult, error)
 	GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.WorkspaceTree, error)
