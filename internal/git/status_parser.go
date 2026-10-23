@@ -3,7 +3,7 @@ package git
 import (
 	"strings"
 
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/domain"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 )
 
 // ParseStatus parses the NUL-delimited output of `git status --porcelain -z`.

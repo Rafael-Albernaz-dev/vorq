@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/domain"
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/files"
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/git"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/files"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/git"
 )
 
 // Service defines the core use case contracts available to both CLI and TUI.
@@ -24,6 +24,18 @@ type Service interface {
 	AuditWorkspaceSafety(ctx context.Context, currentDir string, ws *domain.Workspace) (*domain.SafetyReport, error)
 	RemoveWorkspace(ctx context.Context, currentDir string, targetIdentifier string, force bool) (*domain.SafetyReport, error)
 	PruneWorkspaces(ctx context.Context, currentDir string) (string, error)
+	GetCommitChanges(ctx context.Context, currentDir string) (*domain.ChangeSet, error)
+	StageFiles(ctx context.Context, currentDir string, paths []string) error
+	UnstageFiles(ctx context.Context, currentDir string, paths []string) error
+	ProposeCommit(ctx context.Context, currentDir string, commitType string) (*domain.CommitProposal, error)
+	PreviewCommit(ctx context.Context, currentDir, commitType string, all bool) (*domain.ChangeSet, *domain.CommitProposal, error)
+	CreateCommit(ctx context.Context, currentDir string, message string) (*domain.CommitResult, error)
+	GetPushTarget(ctx context.Context, currentDir string) (*domain.PushTarget, error)
+	PushChanges(ctx context.Context, currentDir string, opts domain.PushOptions) (*domain.PushResult, error)
+	GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.WorkspaceTree, error)
+	GetFileContent(ctx context.Context, currentDir, path string) (*domain.FileContent, error)
+	GetFileDiff(ctx context.Context, currentDir, path string) (*domain.FileDiff, error)
+	ToggleStage(ctx context.Context, currentDir, path string) error
 }
 
 // SpawnOptions holds parameters for provisioning a new worktree.

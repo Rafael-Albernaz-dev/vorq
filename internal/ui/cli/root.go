@@ -1,16 +1,20 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/app"
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/domain"
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/git"
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/version"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/git"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/ui/tui"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/version"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
@@ -51,34 +55,58 @@ var (
 			BorderForeground(lipgloss.Color("#44475A"))
 )
 
+func autoDetectNerdFonts() bool {
+	if v := os.Getenv("VORQ_NERD_FONTS"); v != "" {
+		return v == "1" || strings.ToLower(v) == "true"
+	}
+	if v := os.Getenv("GITGUIA_NERD_FONTS"); v != "" {
+		return v == "1" || strings.ToLower(v) == "true"
+	}
+	term := strings.ToLower(os.Getenv("TERM"))
+	termProg := strings.ToLower(os.Getenv("TERM_PROGRAM"))
+	if strings.Contains(term, "kitty") || strings.Contains(term, "alacritty") ||
+		strings.Contains(termProg, "wezterm") || strings.Contains(termProg, "ghostty") ||
+		strings.Contains(termProg, "warp") || strings.Contains(termProg, "iterm") {
+		return true
+	}
+	return false
+}
+
 // NewRootCmd initializes the root Cobra command and its subcommands.
 func NewRootCmd() *cobra.Command {
 	var showVersion bool
+	var nerdFonts bool
+	var appCore *app.App
 
 	rootCmd := &cobra.Command{
-		Use:   "gitguia",
+		Use:   "vorq",
 		Short: "A local-first companion for safe Git worktree workflows and guided commits",
-		Long: titleStyle.Render("gitguia") + " — " +
-			subtleStyle.Render("Opinionated, local-first CLI and TUI companion in Go for humans and AI agents.\n") +
+		Long: titleStyle.Render("vorq") + " — " +
+			subtleStyle.Render("Opinionated, local-first CLI and TUI companion in Go for humans and AI agents.") + "\n\n" +
+			"Execute " + branchStyle.Render("vorq up") + " (ou apenas " + branchStyle.Render("vorq") + ") para subir o Workspace Studio em tela cheia.\n" +
 			"Manage Git Worktrees, inspect staged diffs, and create safe commits without friction.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if showVersion {
-				fmt.Printf("gitguia version %s (commit: %s, built: %s)\n",
+				fmt.Fprintf(cmd.OutOrStdout(), "vorq version %s (commit: %s, built: %s)\n",
 					version.Version, version.GitCommit, version.BuildDate)
 				return nil
 			}
-			return cmd.Help()
+			return tui.Run(cmd.Context(), appCore, ".", cmd.InOrStdin(), cmd.OutOrStdout(), nerdFonts)
 		},
 	}
 
-	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show gitguia version")
+	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show vorq version")
+	rootCmd.PersistentFlags().BoolVar(&nerdFonts, "nerd-fonts", autoDetectNerdFonts(), "Usar ícones Nerd Font na TUI (auto-detectado ou alternado com 'i')")
 
 	// Wire application core
 	gitRunner, err := git.NewNativeRunner()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
-	appCore := app.NewApp(gitRunner)
+	appCore = app.NewApp(gitRunner)
+
+	rootCmd.AddCommand(newUpCmd(appCore, &nerdFonts))
 
 	// Add subcommands
 	rootCmd.AddCommand(newDoctorCmd(appCore))
@@ -97,6 +125,24 @@ func NewRootCmd() *cobra.Command {
 func Execute() {
 	if err := NewRootCmd().Execute(); err != nil {
 		os.Exit(1)
+	}
+}
+
+func newUpCmd(appCore *app.App, nerdFonts *bool) *cobra.Command {
+	return &cobra.Command{
+		Use:     "up [dir]",
+		Aliases: []string{"tui", "studio", "open"},
+		Short:   "Subir o Workspace Studio em tela cheia (árvore de arquivos, diffs e commits)",
+		Long: "Inicia o Workspace Studio no diretório atual (ou no caminho especificado).\n" +
+			"Navegue pelos arquivos, visualize diffs coloridos, organize worktrees e faça commits guiados.",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetDir := "."
+			if len(args) > 0 {
+				targetDir = args[0]
+			}
+			return tui.Run(cmd.Context(), appCore, targetDir, cmd.InOrStdin(), cmd.OutOrStdout(), *nerdFonts)
+		},
 	}
 }
 
@@ -121,7 +167,7 @@ func newDoctorCmd(appCore *app.App) *cobra.Command {
 				fmt.Println(successStyle.Render("✓") + " Git Root: " + proj.RootPath)
 			}
 
-			fmt.Println(successStyle.Render("✓") + " gitguia engine initialized successfully.")
+			fmt.Println(successStyle.Render("✓") + " vorq engine initialized successfully.")
 			return nil
 		},
 	}
@@ -381,26 +427,266 @@ func newSpawnCmd(appCore *app.App) *cobra.Command {
 	return cmd
 }
 
-func newCommitCmd(appCore *app.App) *cobra.Command {
-	return &cobra.Command{
+func newCommitCmd(appCore app.Service) *cobra.Command {
+	var all, dryRun bool
+	var commitType, message string
+	cmd := &cobra.Command{
 		Use:   "commit",
 		Short: "Stage files and create a commit guided by local message proposals",
+		Long: "Cria um commit local preservando hooks e assinatura do Git, sem push.\n" +
+			"Sem flags, permite stage seletivo, escolha de tipo, edição e confirmação.\n" +
+			"--message dispensa confirmação e requer stage existente ou --all.\n" +
+			"--type pula apenas o menu de tipos; a confirmação continua obrigatória.\n" +
+			"--dry-run é passivo: não altera o índice nem o histórico. Com --all,\n" +
+			"prevê as alterações contra HEAD, incluindo untracked não ignorados.\n" +
+			"Em dry-run, o tipo padrão é chore quando --type não é informado.\n" +
+			"Cancelar após stage preserva os arquivos em stage.",
+		Example: "  vorq commit\n  vorq commit --type fix\n  vorq commit -a -m 'feat: add guided commits'\n  vorq commit --dry-run --type feat -a",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println(titleStyle.Render("Guided Commit") + " (Scheduled for slice GGUIA-005)")
+			ctx := cmd.Context()
+			out := cmd.OutOrStdout()
+			reader := bufio.NewReader(cmd.InOrStdin())
+			manual := cmd.Flags().Changed("message")
+			if manual && strings.TrimSpace(message) == "" {
+				return fmt.Errorf("a mensagem de commit não pode estar vazia")
+			}
+			if cmd.Flags().Changed("type") {
+				if err := app.ValidateCommitType(commitType); err != nil {
+					return err
+				}
+			}
+			cs, err := appCore.GetCommitChanges(ctx, ".")
+			if err != nil {
+				return err
+			}
+			if cs.IsClean() {
+				fmt.Fprintln(out, successStyle.Render("✓ Working tree clean (nada para comitar)"))
+				return nil
+			}
+			if dryRun {
+				previewType := commitType
+				if previewType == "" {
+					previewType = "chore"
+				}
+				preview, proposal, err := appCore.PreviewCommit(ctx, ".", previewType, all)
+				if err != nil {
+					return fmt.Errorf("dry-run: %w (use --all para incluir alterações fora do stage)", err)
+				}
+				proposedMessage := proposal.Message()
+				if manual {
+					proposedMessage = message
+				}
+				fmt.Fprintln(out, titleStyle.Render("[DRY-RUN] Proposta de commit: ")+branchStyle.Render(proposedMessage))
+				for _, file := range preview.Files {
+					fmt.Fprintf(out, "  %s %q\n", successStyle.Render(file.Staged), file.Path)
+				}
+				fmt.Fprintln(out, subtleStyle.Render("[DRY-RUN] Nenhum stage ou commit executado."))
+				return nil
+			}
+			if all {
+				if err := appCore.StageFiles(ctx, ".", []string{"-A"}); err != nil {
+					return err
+				}
+				cs, err = appCore.GetCommitChanges(ctx, ".")
+				if err != nil {
+					return err
+				}
+			}
+			if cs.StagedCount() == 0 {
+				if manual || all {
+					return fmt.Errorf("nenhum arquivo em stage; use --all ou git add antes de --message")
+				}
+				fmt.Fprintln(out, warnStyle.Render("Nenhum arquivo em stage. Deseja adicionar alterações?"))
+				fmt.Fprintln(out, "[1] Adicionar todos os arquivos modificados (git add -A)\n[2] Selecionar arquivos individualmente\n[3] Cancelar")
+				choice, err := readCommitChoice(reader, out, "Escolha [1/2/3]: ", []string{"1", "2", "3"})
+				if err != nil {
+					return err
+				}
+				if choice == "3" {
+					fmt.Fprintln(out, subtleStyle.Render("Commit cancelado pelo usuário."))
+					return nil
+				}
+				paths := []string{"-A"}
+				if choice == "2" {
+					paths, err = selectCommitFiles(reader, out, cs.Files)
+					if err != nil {
+						return err
+					}
+				}
+				if err := appCore.StageFiles(ctx, ".", paths); err != nil {
+					return err
+				}
+			}
+			if !manual {
+				if commitType == "" {
+					types := []string{"feat", "fix", "chore", "refactor", "docs", "test", "style", "perf"}
+					fmt.Fprintln(out, titleStyle.Render("Tipo de Commit:"))
+					for i, value := range types {
+						fmt.Fprintf(out, "[%d] %s\n", i+1, branchStyle.Render(value))
+					}
+					choice, err := readCommitChoice(reader, out, "Escolha [1-8]: ", []string{"1", "2", "3", "4", "5", "6", "7", "8"})
+					if err != nil {
+						return err
+					}
+					index, _ := strconv.Atoi(choice)
+					commitType = types[index-1]
+				}
+				proposal, err := appCore.ProposeCommit(ctx, ".", commitType)
+				if err != nil {
+					return err
+				}
+				message = proposal.Message()
+				fmt.Fprintln(out, titleStyle.Render("Mensagem sugerida: ")+branchStyle.Render(message))
+				choice, err := readCommitChoice(reader, out, "[Y/e/n] Confirmar commit? (Y=confirmar, e=editar mensagem, n=cancelar): ", []string{"", "y", "e", "n"})
+				if err != nil {
+					return err
+				}
+				if choice == "n" {
+					fmt.Fprintln(out, warnStyle.Render("Commit cancelado pelo usuário. Os arquivos permanecem em stage."))
+					return nil
+				}
+				if choice == "e" {
+					for {
+						fmt.Fprint(out, "Nova mensagem: ")
+						message, err = readCommitLine(reader)
+						if err != nil {
+							return err
+						}
+						if strings.TrimSpace(message) != "" {
+							break
+						}
+						fmt.Fprintln(out, errorStyle.Render("A mensagem não pode estar vazia."))
+					}
+				}
+			}
+			result, err := appCore.CreateCommit(ctx, ".", message)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "%s %s %s\n", successStyle.Render("✓ Commit criado:"), branchStyle.Render(result.ShortHash), result.Subject)
 			return nil
 		},
+	}
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Adicionar todos os arquivos modificados/untracked (git add -A)")
+	cmd.Flags().StringVarP(&commitType, "type", "t", "", "Tipo: feat, fix, chore, refactor, docs, test, style, perf (mantém confirmação)")
+	cmd.Flags().StringVarP(&message, "message", "m", "", "Mensagem explícita; comita sem confirmação (requer stage ou --all)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Prever arquivos e mensagem sem alterar stage/histórico (tipo padrão: chore)")
+	return cmd
+}
+
+func readCommitLine(reader *bufio.Reader) (string, error) {
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		// EOF is not an empty confirmation. Never authorize a commit implicitly.
+		return "", fmt.Errorf("entrada interativa interrompida; nenhum commit criado (use --message para scripts): %w", err)
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r"), nil
+}
+
+func readCommitChoice(reader *bufio.Reader, out io.Writer, prompt string, choices []string) (string, error) {
+	for {
+		fmt.Fprint(out, prompt)
+		line, err := readCommitLine(reader)
+		if err != nil {
+			return "", err
+		}
+		line = strings.ToLower(strings.TrimSpace(line))
+		for _, choice := range choices {
+			if line == choice {
+				return line, nil
+			}
+		}
+		fmt.Fprintln(out, errorStyle.Render("Opção inválida. Tente novamente."))
 	}
 }
 
-func newPushCmd(appCore *app.App) *cobra.Command {
-	return &cobra.Command{
+func selectCommitFiles(reader *bufio.Reader, out io.Writer, files []domain.FileStatus) ([]string, error) {
+	for i, file := range files {
+		fmt.Fprintf(out, "[%d] %q\n", i+1, file.Path)
+	}
+	for {
+		fmt.Fprint(out, "Arquivos (ex: 1,3): ")
+		line, err := readCommitLine(reader)
+		if err != nil {
+			return nil, err
+		}
+		var paths []string
+		seen := map[int]bool{}
+		valid := true
+		for _, token := range strings.Split(line, ",") {
+			index, err := strconv.Atoi(strings.TrimSpace(token))
+			if err != nil || index < 1 || index > len(files) {
+				valid = false
+				break
+			}
+			if !seen[index] {
+				// Prefix literal selections so a file named -A cannot mean stage-all.
+				paths = append(paths, "./"+files[index-1].Path)
+				seen[index] = true
+			}
+		}
+		if valid && len(paths) > 0 {
+			return paths, nil
+		}
+		fmt.Fprintln(out, errorStyle.Render("Seleção inválida. Informe índices separados por vírgula."))
+	}
+}
+
+func newPushCmd(appCore app.Service) *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Explicitly push local commits to remote target",
+		Long: "Publica somente a branch local no destino exibido, sem force.\n" +
+			"Com upstream, usa o remote e a branch de destino configurados.\n" +
+			"Sem upstream, propõe origin (ou o único remote) e configura upstream\n" +
+			"após confirmação. Múltiplos remotes sem origin exigem upstream explícito.\n" +
+			"O destino e HEAD são revalidados antes de enviar. Nenhum fetch automático.",
+		Example: "  vorq push\n  vorq push --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println(titleStyle.Render("Explicit Push") + " (Scheduled for slice GGUIA-007)")
+			target, err := appCore.GetPushTarget(cmd.Context(), ".")
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Local: %s -> Remote: %s/%s\n", branchStyle.Render(target.Branch), branchStyle.Render(target.Remote), branchStyle.Render(target.RemoteBranch))
+			prompt := fmt.Sprintf("Publicar commits em %s/%s? [Y/n]: ", target.Remote, target.RemoteBranch)
+			if target.HasUpstream && target.Ahead >= 0 {
+				prompt = fmt.Sprintf("Publicar %d commits em %s/%s? [Y/n]: ", target.Ahead, target.Remote, target.RemoteBranch)
+			}
+			if !target.HasUpstream {
+				prompt = "Branch sem upstream. Deseja publicar e configurar upstream? [Y/n]: "
+			}
+			if !yes {
+				reader := bufio.NewReader(cmd.InOrStdin())
+				for {
+					fmt.Fprint(out, prompt)
+					line, err := reader.ReadString('\n')
+					if err != nil {
+						return fmt.Errorf("confirmação de push interrompida; nada publicado: %w", err)
+					}
+					choice := strings.ToLower(strings.TrimSpace(line))
+					if choice == "n" {
+						fmt.Fprintln(out, subtleStyle.Render("Push cancelado. Nada publicado."))
+						return nil
+					}
+					if choice == "" || choice == "y" {
+						break
+					}
+					fmt.Fprintln(out, warnStyle.Render("Opção inválida. Use Y ou n."))
+				}
+			}
+			if _, err := appCore.PushChanges(cmd.Context(), ".", domain.PushOptions{Target: *target}); err != nil {
+				return err
+			}
+			fmt.Fprintln(out, successStyle.Render("✓ Push concluído: ")+target.Remote+"/"+target.RemoteBranch)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Publicar no destino exibido sem confirmação interativa")
+	return cmd
 }
 
 func newRmCmd(appCore *app.App) *cobra.Command {
@@ -432,7 +718,7 @@ func newRmCmd(appCore *app.App) *cobra.Command {
 					fmt.Println()
 					if canForce {
 						fmt.Println(subtleStyle.Render("Hint: To permanently discard uncommitted/ignored files, run:"))
-						fmt.Printf("  gitguia rm %s --force\n\n", target)
+						fmt.Printf("  vorq rm %s --force\n\n", target)
 					}
 				} else {
 					fmt.Printf("  %s %s\n\n", warnStyle.Render("•"), err.Error())

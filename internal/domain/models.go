@@ -4,24 +4,24 @@ import "time"
 
 // Project represents the Git repository identity and its resolved settings.
 type Project struct {
-	ID        string `json:"id"`        // Unique project ID (typically canonical git-common-dir path)
-	RootPath  string `json:"root_path"` // Path to the main repository
-	GitDir    string `json:"git_dir"`   // Resolved git common dir
+	ID                string `json:"id"`        // Unique project ID (typically canonical git-common-dir path)
+	RootPath          string `json:"root_path"` // Path to the main repository
+	GitDir            string `json:"git_dir"`   // Resolved git common dir
 	DefaultBaseBranch string `json:"default_base_branch"`
 }
 
 // Workspace represents an isolated Git worktree or the main working tree.
 type Workspace struct {
 	Path        string     `json:"path"`
-	Branch      string     `json:"branch"`       // e.g. "main", "feat/x" or "(detached HEAD)"
-	CommitHash  string     `json:"commit_hash"`  // 40-character commit hash or short
-	IsMain      bool       `json:"is_main"`      // true if this is the root working tree
-	IsCurrent   bool       `json:"is_current"`   // true if this workspace matches current working directory
-	IsBare      bool       `json:"is_bare"`      // true if bare repository
-	IsDetached  bool       `json:"is_detached"`  // true if in detached HEAD state
-	IsLocked    bool       `json:"is_locked"`    // true if locked by git worktree lock
+	Branch      string     `json:"branch"`      // e.g. "main", "feat/x" or "(detached HEAD)"
+	CommitHash  string     `json:"commit_hash"` // 40-character commit hash or short
+	IsMain      bool       `json:"is_main"`     // true if this is the root working tree
+	IsCurrent   bool       `json:"is_current"`  // true if this workspace matches current working directory
+	IsBare      bool       `json:"is_bare"`     // true if bare repository
+	IsDetached  bool       `json:"is_detached"` // true if in detached HEAD state
+	IsLocked    bool       `json:"is_locked"`   // true if locked by git worktree lock
 	LockReason  string     `json:"lock_reason,omitempty"`
-	IsPrunable  bool       `json:"is_prunable"`  // true if marked as prunable by Git
+	IsPrunable  bool       `json:"is_prunable"` // true if marked as prunable by Git
 	PruneReason string     `json:"prune_reason,omitempty"`
 	Status      *ChangeSet `json:"status,omitempty"`
 	CreatedAt   time.Time  `json:"created_at,omitempty"`
@@ -55,7 +55,7 @@ func (c *ChangeSet) IsClean() bool {
 func (c *ChangeSet) StagedCount() int {
 	count := 0
 	for _, f := range c.Files {
-		if f.Staged != "" && f.Staged != " " && f.Staged != "?" {
+		if f.IsStaged() {
 			count++
 		}
 	}
@@ -95,12 +95,89 @@ const (
 
 // CommitProposal represents a suggested commit message and its metadata.
 type CommitProposal struct {
-	Subject       string               `json:"subject"`
-	Body          string               `json:"body,omitempty"`
-	Engine        SuggestionEngineType `json:"engine"`
-	ModelName     string               `json:"model_name,omitempty"`
-	GeneratedAt   time.Time            `json:"generated_at"`
-	IsUserEdited  bool                 `json:"is_user_edited"`
+	Subject      string               `json:"subject"`
+	Body         string               `json:"body,omitempty"`
+	Engine       SuggestionEngineType `json:"engine"`
+	ModelName    string               `json:"model_name,omitempty"`
+	GeneratedAt  time.Time            `json:"generated_at"`
+	IsUserEdited bool                 `json:"is_user_edited"`
+}
+
+// CommitResult details a successfully created local commit.
+type CommitResult struct {
+	Hash           string   `json:"hash"`
+	ShortHash      string   `json:"short_hash"`
+	Subject        string   `json:"subject"`
+	FilesCommitted []string `json:"files_committed"`
+}
+
+// PushTarget is a preview of one explicit branch publication. DestinationID
+// fingerprints push URLs without exposing embedded credentials in the UI.
+type PushTarget struct {
+	WorkspacePath string `json:"workspace_path"`
+	Branch        string `json:"branch"`
+	Remote        string `json:"remote"`
+	RemoteBranch  string `json:"remote_branch"`
+	HasUpstream   bool   `json:"has_upstream"`
+	Ahead         int    `json:"ahead"` // -1 when the remote-tracking ref is unavailable
+	Behind        int    `json:"behind"`
+	HeadHash      string `json:"head_hash"`
+	DestinationID string `json:"destination_id"`
+}
+
+// PushOptions must carry the target actually reviewed by the caller.
+type PushOptions struct {
+	Target PushTarget `json:"target"`
+}
+
+type PushResult struct {
+	Target PushTarget `json:"target"`
+	Output string     `json:"output"`
+}
+
+func (f FileStatus) IsStaged() bool {
+	return !f.IsConflicted() && f.Staged != "" && f.Staged != " " && f.Staged != "?"
+}
+func (f FileStatus) IsConflicted() bool {
+	return f.Staged == "U" || f.Unstaged == "U" || (f.Staged == "A" && f.Unstaged == "A") || (f.Staged == "D" && f.Unstaged == "D")
+}
+func (f FileStatus) IsUntracked() bool { return f.Staged == "?" || f.Unstaged == "?" }
+func (f FileStatus) IsUnstaged() bool {
+	return f.Unstaged != "" && f.Unstaged != " " && f.Unstaged != "?"
+}
+func (f FileStatus) IsDeleted() bool { return f.Staged == "D" || f.Unstaged == "D" }
+
+// TreeNode paths are always relative to the current workspace root.
+type TreeNode struct {
+	Name           string      `json:"name"`
+	Path           string      `json:"path"`
+	IsDir          bool        `json:"is_dir"`
+	Status         FileStatus  `json:"status"`
+	Children       []*TreeNode `json:"children,omitempty"`
+	StagedCount    int         `json:"staged_count"`
+	UnstagedCount  int         `json:"unstaged_count"`
+	UntrackedCount int         `json:"untracked_count"`
+	DeletedCount   int         `json:"deleted_count"`
+}
+
+type WorkspaceTree struct {
+	Workspace Workspace  `json:"workspace"`
+	Root      *TreeNode  `json:"root"`
+	Changes   *ChangeSet `json:"changes"`
+}
+
+type FileContent struct {
+	Path      string `json:"path"`
+	Text      string `json:"text"`
+	Binary    bool   `json:"binary"`
+	Truncated bool   `json:"truncated"`
+	Notice    string `json:"notice,omitempty"`
+}
+
+type FileDiff struct {
+	Staged    string `json:"staged"`
+	Unstaged  string `json:"unstaged"`
+	Truncated bool   `json:"truncated"`
 }
 
 // Message returns the formatted commit message.

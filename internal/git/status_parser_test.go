@@ -3,7 +3,7 @@ package git_test
 import (
 	"testing"
 
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/git"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/git"
 )
 
 func TestParseStatus(t *testing.T) {

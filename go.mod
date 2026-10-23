@@ -1,4 +1,4 @@
-module github.com/Rafael-Albernaz-dev/gitguia
+module github.com/Rafael-Albernaz-dev/vorq
 
 go 1.27.1
 

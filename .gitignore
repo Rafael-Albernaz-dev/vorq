@@ -16,6 +16,7 @@ GEMINI.md
 .agents/
 .codex/
 .gemini/
+prompts/
 
 # Environment files & Secrets
 .env
@@ -25,6 +26,7 @@ GEMINI.md
 *.key
 
 # Local state & caches
+.vorq/
 .gitguia/
 *.log
 

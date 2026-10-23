@@ -4,8 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/domain"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 )
+
+func TestFileStatus_ConflictsAreNotStaged(t *testing.T) {
+	for _, status := range []domain.FileStatus{{Staged: "U", Unstaged: "U"}, {Staged: "A", Unstaged: "A"}, {Staged: "D", Unstaged: "D"}} {
+		if !status.IsConflicted() || status.IsStaged() {
+			t.Fatalf("conflict misclassified: %+v", status)
+		}
+	}
+}
 
 func TestChangeSet_IsClean(t *testing.T) {
 	csEmpty := domain.ChangeSet{

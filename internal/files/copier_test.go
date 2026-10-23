@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Rafael-Albernaz-dev/gitguia/internal/files"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/files"
 )
 
 func TestCopyFile(t *testing.T) {

@@ -1,6 +1,6 @@
-# gitguia — System Architecture
+# vorq — System Architecture
 
-`gitguia` is an opinionated, local-first Git companion tool built in Go. It guides developers and autonomous AI agents through clean workspace isolation (via Git Worktrees), state inspection, staging, local commit suggestions, and safe publishing.
+`vorq` is an opinionated, local-first terminal workspace studio and Git companion built in Go. It guides developers and autonomous AI agents through clean workspace isolation (via Git Worktrees), interactive file browsing, syntax-highlighted diff inspection, local Conventional Commit drafting, and safe explicit publishing.
 
 ## 1. Architectural Principles
 
@@ -50,9 +50,9 @@ flowchart TD
 ## 3. Directory Layout
 
 ```text
-gitguia/
+vorq/
 ├── cmd/
-│   └── gitguia/           # Application entrypoint & CLI routing
+│   └── vorq/              # Application entrypoint & CLI routing
 ├── internal/
 │   ├── domain/            # Core models: Project, Workspace, ChangeSet, CommitProposal
 │   ├── app/               # Application use cases orchestrating workflows

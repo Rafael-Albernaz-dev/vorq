@@ -28,4 +28,4 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Build binary
-        run: go build -v -o bin/gitguia ./cmd/gitguia
+        run: go build -v -o bin/vorq ./cmd/vorq

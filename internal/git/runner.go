@@ -23,6 +23,15 @@ type Runner interface {
 	WorktreePrune(ctx context.Context, repoDir string) (string, error)
 	BranchDelete(ctx context.Context, repoDir, branch string, force bool) error
 	IgnoredFiles(ctx context.Context, wsDir string) ([]string, error)
+	Add(ctx context.Context, wsDir string, paths ...string) error
+	Reset(ctx context.Context, wsDir string, paths ...string) error
+	Commit(ctx context.Context, wsDir string, message string) (string, error)
+	RevParseHead(ctx context.Context, wsDir string) (string, error)
+	CurrentBranch(ctx context.Context, wsDir string) (string, error)
+	Remotes(ctx context.Context, wsDir string) ([]string, error)
+	Upstream(ctx context.Context, wsDir string) (string, error)
+	Push(ctx context.Context, wsDir, remote, branch, target string, setUpstream bool) (string, error)
+	FileDiff(ctx context.Context, wsDir, path string, staged bool) (string, bool, error)
 }
 
 // NativeRunner executes Git via system subprocesses.
@@ -104,7 +113,131 @@ func (r *NativeRunner) AheadBehind(ctx context.Context, wsDir string) (int, int,
 
 // DiffCached returns staged diff.
 func (r *NativeRunner) DiffCached(ctx context.Context, wsDir string) (string, error) {
-	return r.Exec(ctx, wsDir, "diff", "--cached")
+	return r.Exec(ctx, wsDir, "diff", "--cached", "--no-ext-diff", "--no-textconv")
+}
+
+// Add stages literal paths, or the entire workspace for the single sentinel . or -A.
+func (r *NativeRunner) Add(ctx context.Context, wsDir string, paths ...string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("at least one path is required for stage")
+	}
+	for _, path := range paths {
+		if path == "." || path == "-A" {
+			if len(paths) != 1 {
+				return fmt.Errorf("stage-all sentinel must be used alone")
+			}
+			_, err := r.Exec(ctx, wsDir, "add", "-A")
+			return err
+		}
+		if path == "" {
+			return fmt.Errorf("empty stage path")
+		}
+	}
+	_, err := r.Exec(ctx, wsDir, append([]string{"--literal-pathspecs", "add", "--"}, paths...)...)
+	return err
+}
+
+// Reset removes literal paths from the index without changing working files.
+func (r *NativeRunner) Reset(ctx context.Context, wsDir string, paths ...string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("at least one path is required for unstage")
+	}
+	for _, path := range paths {
+		if path == "" {
+			return fmt.Errorf("empty unstage path")
+		}
+	}
+	_, err := r.Exec(ctx, wsDir, append([]string{"--literal-pathspecs", "reset", "--"}, paths...)...)
+	return err
+}
+
+// Commit preserves native hooks and signing configuration; it never pushes.
+func (r *NativeRunner) Commit(ctx context.Context, wsDir string, message string) (string, error) {
+	if strings.TrimSpace(message) == "" {
+		return "", fmt.Errorf("commit message must not be empty")
+	}
+	if _, err := r.Exec(ctx, wsDir, "commit", "-m", message); err != nil {
+		return "", err
+	}
+	return r.RevParseHead(ctx, wsDir)
+}
+
+// RevParseHead returns the full object ID of the current commit.
+func (r *NativeRunner) RevParseHead(ctx context.Context, wsDir string) (string, error) {
+	out, err := r.Exec(ctx, wsDir, "rev-parse", "--verify", "HEAD")
+	return strings.TrimSpace(out), err
+}
+
+func (r *NativeRunner) CurrentBranch(ctx context.Context, wsDir string) (string, error) {
+	out, err := r.Exec(ctx, wsDir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	return strings.TrimSpace(out), err
+}
+
+func (r *NativeRunner) Remotes(ctx context.Context, wsDir string) ([]string, error) {
+	out, err := r.Exec(ctx, wsDir, "remote")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out) == "" {
+		return nil, nil
+	}
+	return strings.Split(strings.TrimSpace(out), "\n"), nil
+}
+
+func (r *NativeRunner) Upstream(ctx context.Context, wsDir string) (string, error) {
+	out, err := r.Exec(ctx, wsDir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	return strings.TrimSpace(out), err
+}
+
+// Push uses an explicit refspec so push.default, configured push refspecs and
+// differently named upstream branches cannot silently redirect publication.
+func (r *NativeRunner) Push(ctx context.Context, wsDir, remote, branch, target string, setUpstream bool) (string, error) {
+	if remote == "" || branch == "" || target == "" {
+		return "", fmt.Errorf("remote and branch names are required")
+	}
+	args := []string{"push", "--porcelain", "--no-follow-tags", "--recurse-submodules=no"}
+	if setUpstream {
+		args = append(args, "-u")
+	}
+	args = append(args, "--", remote, "refs/heads/"+branch+":refs/heads/"+target)
+	return r.Exec(ctx, wsDir, args...)
+}
+
+// cappedOutput drains output without retaining more than the preview limit.
+type cappedOutput struct {
+	buffer    bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func (b *cappedOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	remaining := b.limit - b.buffer.Len()
+	if len(p) > remaining {
+		p = p[:remaining]
+		b.truncated = true
+	}
+	_, _ = b.buffer.Write(p)
+	return n, nil
+}
+
+func (b *cappedOutput) String() string { return b.buffer.String() }
+
+func (r *NativeRunner) FileDiff(ctx context.Context, wsDir, path string, staged bool) (string, bool, error) {
+	args := []string{"--no-pager", "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--color=never"}
+	if staged {
+		args = append(args, "--cached")
+	}
+	args = append(args, "--", path)
+	cmd := exec.CommandContext(ctx, r.gitBinPath, args...)
+	cmd.Dir = wsDir
+	out := &cappedOutput{limit: 256 * 1024}
+	var stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = out, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", false, fmt.Errorf("read file diff: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return out.String(), out.truncated, nil
 }
 
 // Diff returns unstaged diff.
