@@ -257,16 +257,25 @@ func (a *App) CreateCommit(ctx context.Context, currentDir, message string) (*do
 	if err != nil {
 		return nil, err
 	}
+	shortHash := hash
+	if len(shortHash) > 7 {
+		shortHash = shortHash[:7]
+	}
+	result := &domain.CommitResult{Hash: hash, ShortHash: shortHash}
+	metadataFailure := func(operation string, cause error) (*domain.CommitResult, error) {
+		return result, &domain.CommitMetadataError{Hash: hash, Operation: operation, Err: cause}
+	}
 	// Read the resulting commit, because native hooks may have edited the message
 	// or index. Metadata must describe what Git actually committed.
 	metadata, err := a.gitRunner.Exec(ctx, cs.WorkspacePath, "log", "-1", "--format=%s%x00%P", hash)
 	if err != nil {
-		return nil, fmt.Errorf("commit %s created, but reading subject failed: %w", hash, err)
+		return metadataFailure("reading subject", err)
 	}
 	subject, parentList, ok := strings.Cut(metadata, "\x00")
 	if !ok {
-		return nil, fmt.Errorf("commit %s created, but commit metadata is malformed", hash)
+		return metadataFailure("reading subject", fmt.Errorf("commit metadata is malformed"))
 	}
+	result.Subject = strings.TrimSpace(subject)
 	args := []string{"diff-tree", "--root", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z"}
 	if parents := strings.Fields(parentList); len(parents) > 0 {
 		args = append(args, parents[0])
@@ -274,15 +283,12 @@ func (a *App) CreateCommit(ctx context.Context, currentDir, message string) (*do
 	args = append(args, hash, "--")
 	raw, err := a.gitRunner.Exec(ctx, cs.WorkspacePath, args...)
 	if err != nil {
-		return nil, fmt.Errorf("commit %s created, but reading files failed: %w", hash, err)
+		return metadataFailure("reading files", err)
 	}
 	files := strings.Split(strings.TrimSuffix(raw, "\x00"), "\x00")
 	if raw == "" {
 		files = nil
 	}
-	shortHash := hash
-	if len(shortHash) > 7 {
-		shortHash = shortHash[:7]
-	}
-	return &domain.CommitResult{Hash: hash, ShortHash: shortHash, Subject: strings.TrimSpace(subject), FilesCommitted: files}, nil
+	result.FilesCommitted = files
+	return result, nil
 }
