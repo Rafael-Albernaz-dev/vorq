@@ -68,3 +68,10 @@ vorq/
 ├── go.mod
 └── go.sum
 ```
+
+
+## Presentation preferences and source highlighting
+
+Appearance preferences belong to the user configuration directory, outside Git worktrees. Themes are saved by stable name through an atomic temporary-file rename; a revision guard prevents older commands in a session from overwriting newer choices. Closing the TUI flushes the latest selected theme.
+
+Chroma supplies lexical highlighting. Embedded Tree-sitter grammars classify local structural roles for Go, TS/TSX, JS/JSX, Python, HTML, CSS and JSON; parsers are scoped to the asynchronous preview command and closed after use. There is no project execution, editor extension host, or cross-file language-server resolution. Parser bindings require CGO at build time. Git mutations continue exclusively through `app.Service`.
