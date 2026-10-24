@@ -143,13 +143,37 @@ type CommitProposal struct {
 	IsUserEdited bool                 `json:"is_user_edited"`
 }
 
-// CommitResult details a successfully created local commit.
+// CommitResult identifies a commit already created by native Git. When returned
+// with CommitMetadataError, only successfully read metadata is populated.
 type CommitResult struct {
 	Hash           string   `json:"hash"`
 	ShortHash      string   `json:"short_hash"`
 	Subject        string   `json:"subject"`
 	FilesCommitted []string `json:"files_committed"`
 }
+
+// CommitMetadataError reports a confirmed commit whose subsequent metadata read
+// failed. Hash may be empty if HEAD could not be resolved after native commit
+// succeeded. Callers must present the created commit and must not retry creation.
+type CommitMetadataError struct {
+	Hash      string
+	Operation string
+	Err       error
+}
+
+func (e *CommitMetadataError) Error() string {
+	message := "commit"
+	if e.Hash != "" {
+		message += " " + e.Hash
+	}
+	message += " created, but " + e.Operation + " failed"
+	if e.Err != nil {
+		message += ": " + e.Err.Error()
+	}
+	return message
+}
+
+func (e *CommitMetadataError) Unwrap() error { return e.Err }
 
 // PushTarget is a preview of one explicit branch publication. DestinationID
 // fingerprints push URLs without exposing embedded credentials in the UI.
@@ -230,6 +254,17 @@ type FileDiff struct {
 	Staged    string `json:"staged"`
 	Unstaged  string `json:"unstaged"`
 	Truncated bool   `json:"truncated"`
+}
+
+// DiscardPlan describes exactly the file state and impact reviewed by a caller.
+// Fingerprint is revalidated by the core; it is not a substitute for confirmation.
+type DiscardPlan struct {
+	WorkspacePath string
+	Path          string
+	Impact        string
+	Fingerprint   string
+	Delete        bool
+	Staged        bool
 }
 
 // Message returns the formatted commit message.

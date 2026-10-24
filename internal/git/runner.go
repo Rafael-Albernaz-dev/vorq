@@ -3,9 +3,13 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
+
+	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 )
 
 // Runner defines the interface for interacting with the native Git binary.
@@ -51,6 +55,7 @@ func NewNativeRunner() (*NativeRunner, error) {
 // Exec executes a git command in the specified directory with structured arguments.
 func (r *NativeRunner) Exec(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, r.gitBinPath, args...)
+	cmd.WaitDelay = 2 * time.Second
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -67,7 +72,7 @@ func (r *NativeRunner) Exec(ctx context.Context, dir string, args ...string) (st
 		if errStr == "" {
 			errStr = err.Error()
 		}
-		return "", fmt.Errorf("git error [%v]: %s", args, errStr)
+		return "", fmt.Errorf("git error [%v]: %s: %w", args, errStr, err)
 	}
 
 	return stdout.String(), nil
@@ -113,7 +118,7 @@ func (r *NativeRunner) AheadBehind(ctx context.Context, wsDir string) (int, int,
 
 // DiffCached returns staged diff.
 func (r *NativeRunner) DiffCached(ctx context.Context, wsDir string) (string, error) {
-	return r.Exec(ctx, wsDir, "diff", "--cached", "--no-ext-diff", "--no-textconv")
+	return r.Exec(ctx, wsDir, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--color=never")
 }
 
 // Add stages literal paths, or the entire workspace for the single sentinel . or -A.
@@ -147,6 +152,22 @@ func (r *NativeRunner) Reset(ctx context.Context, wsDir string, paths ...string)
 			return fmt.Errorf("empty unstage path")
 		}
 	}
+	// An unborn branch has no HEAD to restore. Removing only index entries
+	// preserves every working byte, including newly staged files.
+	if _, headErr := r.Exec(ctx, wsDir, "rev-parse", "--verify", "--quiet", "HEAD"); headErr != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		var exitErr *exec.ExitError
+		if !errors.As(headErr, &exitErr) || exitErr.ExitCode() != 1 {
+			return headErr
+		}
+		if _, err := r.Exec(ctx, wsDir, "symbolic-ref", "--quiet", "HEAD"); err != nil {
+			return headErr
+		}
+		_, err := r.Exec(ctx, wsDir, append([]string{"--literal-pathspecs", "rm", "--cached", "-f", "-r", "--ignore-unmatch", "--"}, paths...)...)
+		return err
+	}
 	_, err := r.Exec(ctx, wsDir, append([]string{"--literal-pathspecs", "reset", "--"}, paths...)...)
 	return err
 }
@@ -159,7 +180,13 @@ func (r *NativeRunner) Commit(ctx context.Context, wsDir string, message string)
 	if _, err := r.Exec(ctx, wsDir, "commit", "-m", message); err != nil {
 		return "", err
 	}
-	return r.RevParseHead(ctx, wsDir)
+	hash, err := r.RevParseHead(ctx, wsDir)
+	if err != nil {
+		// Native commit already succeeded. A failed metadata read must never be
+		// presented as permission to retry creating the commit.
+		return "", &domain.CommitMetadataError{Operation: "resolving HEAD", Err: err}
+	}
+	return hash, nil
 }
 
 // RevParseHead returns the full object ID of the current commit.
@@ -230,6 +257,7 @@ func (r *NativeRunner) FileDiff(ctx context.Context, wsDir, path string, staged 
 	}
 	args = append(args, "--", path)
 	cmd := exec.CommandContext(ctx, r.gitBinPath, args...)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = wsDir
 	out := &cappedOutput{limit: 256 * 1024}
 	var stderr bytes.Buffer
@@ -242,7 +270,7 @@ func (r *NativeRunner) FileDiff(ctx context.Context, wsDir, path string, staged 
 
 // Diff returns unstaged diff.
 func (r *NativeRunner) Diff(ctx context.Context, wsDir string) (string, error) {
-	return r.Exec(ctx, wsDir, "diff")
+	return r.Exec(ctx, wsDir, "diff", "--no-ext-diff", "--no-textconv", "--color=never")
 }
 
 // BranchExists checks if a local branch already exists in the repository.

@@ -37,6 +37,8 @@ type Service interface {
 	GetFileContent(ctx context.Context, currentDir, path string) (*domain.FileContent, error)
 	GetFileDiff(ctx context.Context, currentDir, path string) (*domain.FileDiff, error)
 	ToggleStage(ctx context.Context, currentDir, path string) error
+	PrepareDiscard(ctx context.Context, currentDir, path string) (*domain.DiscardPlan, error)
+	DiscardFile(ctx context.Context, currentDir string, plan domain.DiscardPlan, confirmed bool) error
 }
 
 // SpawnOptions holds parameters for provisioning a new worktree.
