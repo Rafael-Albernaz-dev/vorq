@@ -63,16 +63,21 @@ func functionNode(kind string) bool {
 }
 
 func structuralSpans(parent context.Context, filename, source string) []symbolSpan {
+	spans, _ := parseSyntaxSpans(parent, filename, source)
+	return spans
+}
+
+func parseSyntaxSpans(parent context.Context, filename, source string) ([]symbolSpan, bool) {
 	language, dialect := symbolLanguage(filename)
 	if language == nil || source == "" || parent.Err() != nil {
-		return nil
+		return nil, false
 	}
 	ctx, cancel := context.WithTimeout(parent, 500*time.Millisecond)
 	defer cancel()
 	parser := ts.NewParser()
 	defer parser.Close()
 	if err := parser.SetLanguage(language); err != nil {
-		return nil
+		return nil, false
 	}
 	bytes := []byte(source)
 	// ParseWithOptions avoids the binding's deprecated ParseCtx goroutine and
@@ -84,22 +89,27 @@ func structuralSpans(parent context.Context, filename, source string) []symbolSp
 		return bytes[offset:]
 	}, nil, &ts.ParseOptions{ProgressCallback: func(ts.ParseState) bool { return ctx.Err() != nil }})
 	if tree == nil {
-		return nil
+		return nil, false
 	}
 	defer tree.Close()
 	if ctx.Err() != nil {
-		return nil
+		return nil, false
 	}
+	available := true
 	rootScope := &symbolScope{names: map[string]chroma.TokenType{}}
 	spans := []symbolSpan{}
 	var visit func(*ts.Node, *symbolScope, bool, bool, string, int)
 	visit = func(node *ts.Node, scope *symbolScope, parameter, typeContext bool, field string, depth int) {
-		if node == nil || depth > 512 || ctx.Err() != nil {
+		if node == nil || ctx.Err() != nil {
+			return
+		}
+		if depth > 512 {
+			available = false
 			return
 		}
 		kind := node.Kind()
 		if functionNode(kind) || (dialect != "py" && (kind == "block" || kind == "statement_block")) {
-			scope = &symbolScope{parent: scope, names: map[string]chroma.TokenType{}}
+			scope = &symbolScope{parent: scope}
 		}
 		if field == "parameters" || field == "parameter" || field == "receiver" || kind == "parameters" || kind == "formal_parameters" {
 			parameter = true
@@ -112,7 +122,14 @@ func structuralSpans(parent context.Context, filename, source string) []symbolSp
 			parameter = false
 			typeContext = false
 		}
-		role, definition, resolve := nodeRole(node, field, parameter, typeContext, dialect, bytes)
+		var role chroma.TokenType
+		var definition, resolve bool
+		if node.IsNamed() {
+			role, definition, resolve = nodeRole(node, field, parameter, typeContext, dialect, bytes)
+		}
+		if role == 0 {
+			role = lexicalNodeRole(node, bytes)
+		}
 		if role != 0 && node.EndByte() > node.StartByte() {
 			text := node.Utf8Text(bytes)
 			if definition {
@@ -120,6 +137,9 @@ func structuralSpans(parent context.Context, filename, source string) []symbolSp
 				// The name child is visited after the new function scope exists.
 				if field == "name" && functionNode(kindOf(node.Parent())) && scope.parent != nil {
 					owner = scope.parent
+				}
+				if owner.names == nil {
+					owner.names = map[string]chroma.TokenType{}
 				}
 				owner.names[text] = role
 			}
@@ -134,20 +154,22 @@ func structuralSpans(parent context.Context, filename, source string) []symbolSp
 				inline = "inline.css"
 			}
 			if inline != "" {
-				for _, span := range structuralSpans(ctx, inline, node.Utf8Text(bytes)) {
+				inlineSpans, valid := parseSyntaxSpans(ctx, inline, node.Utf8Text(bytes))
+				available = available && valid
+				for _, span := range inlineSpans {
 					span.start += node.StartByte()
 					span.end += node.StartByte()
 					spans = append(spans, span)
 				}
 			}
 		}
-		for i := uint(0); i < node.NamedChildCount(); i++ {
-			visit(node.NamedChild(i), scope, parameter, typeContext, node.FieldNameForNamedChild(uint32(i)), depth+1)
+		for i := uint(0); i < node.ChildCount(); i++ {
+			visit(node.Child(i), scope, parameter, typeContext, node.FieldNameForChild(uint32(i)), depth+1)
 		}
 	}
 	visit(tree.RootNode(), rootScope, false, false, "", 0)
 	if ctx.Err() != nil {
-		return nil
+		return nil, false
 	}
 	for i := range spans {
 		span := &spans[i]
@@ -167,7 +189,7 @@ func structuralSpans(parent context.Context, filename, source string) []symbolSp
 		}
 		return spans[i].end > spans[j].end
 	})
-	return spans
+	return spans, available
 }
 
 func kindOf(node *ts.Node) string {

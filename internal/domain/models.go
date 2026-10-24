@@ -152,6 +152,14 @@ type CommitResult struct {
 	FilesCommitted []string `json:"files_committed"`
 }
 
+// GitEntry and CommitInfo carry parsed repository metadata across the adapter
+// boundary, keeping native output formats outside application use cases.
+type GitEntry struct{ Mode, ObjectID string }
+type CommitInfo struct {
+	Subject string
+	Parents []string
+}
+
 // CommitMetadataError reports a confirmed commit whose subsequent metadata read
 // failed. Hash may be empty if HEAD could not be resolved after native commit
 // succeeded. Callers must present the created commit and must not retry creation.

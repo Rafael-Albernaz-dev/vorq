@@ -62,7 +62,7 @@ func setupStudio(t *testing.T) (*Model, *observedService, *git.NativeRunner, str
 	writeStudio(t, dir, "file.go", "package main\n\n// changed\n")
 	writeStudio(t, dir, ".env", "private\n")
 	writeStudio(t, dir, "bin/ignored", "ignored\n")
-	core := &observedService{Service: app.NewApp(r)}
+	core := &observedService{Service: app.NewApp(git.NewRepository(r))}
 	m := NewModel(ctx, core, dir)
 	drive(t, m, m.refresh())
 	selectPath(t, m, "file.go")

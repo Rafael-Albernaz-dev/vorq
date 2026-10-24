@@ -82,7 +82,7 @@ vorq up /path/to/another-project
 
 The default icon mode is `emoji`; `--icons=text` selects ASCII language badges. Press `i` to switch modes; `t` opens appearance settings. The selected theme is saved per user in `$XDG_CONFIG_HOME/vorq/appearance.json` (normally `~/.config/vorq/appearance.json`) and restored on the next launch, across worktrees.
 
-File and diff previews combine Chroma with embedded Tree-sitter parsers for Go, TypeScript/TSX, JavaScript/JSX, Python, HTML, CSS, and JSON. Functions, parameters, variables, types, properties, tags and attributes receive distinct roles. HTML script/style blocks and Go manifests are also highlighted. Local scope classification runs without executing project code; it does not provide cross-file type resolution or an IDE language server. Other languages retain Chroma highlighting. Plain terminal output is respected.
+File and diff previews combine Chroma theme styles with embedded Tree-sitter parsers for Go, TypeScript/TSX, JavaScript/JSX, Python, HTML, CSS, and JSON. Functions, parameters, variables, types, properties, tags and attributes receive distinct roles. HTML script/style blocks and Go manifests are also highlighted. Local scope classification runs without executing project code; it does not provide cross-file type resolution or an IDE language server. Other languages and unavailable grammars retain Chroma highlighting. Plain terminal output is respected.
 
 Discard opens a confirmation dialog with the exact path and impact. New staged files offer **Discard** (permanent deletion) and **Preserve** (`u`, unstage only). Ignored files, directories, symlinks, renames, conflicts, and submodules are protected. A changed file/index/HEAD invalidates the discard review. No discard runs without confirmation.
 
@@ -109,6 +109,8 @@ Discard opens a confirmation dialog with the exact path and impact. New staged f
 | `q` or `Ctrl + C` | Global | Exit and cleanly restore terminal |
 
 ---
+
+Worktree removal blocks when status or ignored-file inspection fails, including with `--force`. If a path remains after Git finishes removal, vorq preserves it and reports the partial outcome. The active and main worktrees remain protected.
 
 ## 🛠️ CLI Subcommands (Scriptable & Non-Interactive)
 

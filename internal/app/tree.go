@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
-	"github.com/Rafael-Albernaz-dev/vorq/internal/git"
 )
 
 const FilePreviewLimit = 256 * 1024
@@ -24,23 +23,22 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 	if err != nil {
 		return nil, err
 	}
-	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames")
+	branch, detached, err := a.gitRunner.Branch(ctx, proj.RootPath)
 	if err != nil {
 		return nil, err
 	}
-	branch, branchErr := a.gitRunner.CurrentBranch(ctx, proj.RootPath)
-	if branchErr != nil {
-		branch = "(detached HEAD)"
-	}
-	changes, err := git.ParseStatus(raw, proj.RootPath, branch)
+	changes, err := a.gitRunner.ReadChanges(ctx, proj.RootPath, branch)
 	if err != nil {
 		return nil, err
+	}
+	if changes == nil {
+		return nil, fmt.Errorf("workspace status unavailable")
 	}
 	changes.Ahead, changes.Behind, err = a.gitRunner.AheadBehind(ctx, proj.RootPath)
 	if err != nil {
 		return nil, err
 	}
-	listed, err := a.gitRunner.Exec(ctx, proj.RootPath, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	listed, err := a.gitRunner.TrackedPaths(ctx, proj.RootPath)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +69,7 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 		}
 		return parent
 	}
-	for _, path := range strings.Split(listed, "\x00") {
+	for _, path := range listed {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -119,7 +117,7 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 		}
 	}
 	aggregate(root)
-	return &domain.WorkspaceTree{Workspace: domain.Workspace{Path: proj.RootPath, Branch: branch, IsDetached: branchErr != nil, Status: changes}, Root: root, Changes: changes}, nil
+	return &domain.WorkspaceTree{Workspace: domain.Workspace{Path: proj.RootPath, Branch: branch, IsDetached: detached, Status: changes}, Root: root, Changes: changes}, nil
 }
 
 func validateViewerPath(path string) error {
@@ -226,13 +224,12 @@ func (a *App) ToggleStage(ctx context.Context, currentDir, path string) error {
 	if err != nil {
 		return err
 	}
-	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames")
+	changes, err := a.gitRunner.ReadChanges(ctx, proj.RootPath, "")
 	if err != nil {
 		return err
 	}
-	changes, err := git.ParseStatus(raw, proj.RootPath, "")
-	if err != nil {
-		return err
+	if changes == nil {
+		return fmt.Errorf("workspace status unavailable")
 	}
 	for _, f := range changes.Files {
 		if f.Path == path {

@@ -33,7 +33,7 @@ func setupCommitApp(t *testing.T) (*app.App, *git.NativeRunner, string) {
 			t.Fatal(err)
 		}
 	}
-	return app.NewApp(runner), runner, dir
+	return app.NewApp(git.NewRepository(runner)), runner, dir
 }
 
 func writeCommitFile(t *testing.T, dir, path, content string) {
@@ -125,7 +125,7 @@ func TestApp_Commit_CurrentLinkedWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	application := app.NewApp(runner)
+	application := app.NewApp(git.NewRepository(runner))
 	ctx := context.Background()
 	before, err := runner.RevParseHead(ctx, mainDir)
 	if err != nil {
@@ -487,7 +487,7 @@ func TestApp_ResolveProject(t *testing.T) {
 		t.Fatalf("failed to initialize NativeRunner: %v", err)
 	}
 
-	application := app.NewApp(runner)
+	application := app.NewApp(git.NewRepository(runner))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -513,7 +513,7 @@ func TestApp_ListWorktrees_And_Status(t *testing.T) {
 		t.Fatalf("failed to initialize NativeRunner: %v", err)
 	}
 
-	application := app.NewApp(runner)
+	application := app.NewApp(git.NewRepository(runner))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -581,7 +581,7 @@ func TestApp_SpawnWorkspace(t *testing.T) {
 		t.Fatalf("failed to initialize NativeRunner: %v", err)
 	}
 
-	application := app.NewApp(runner)
+	application := app.NewApp(git.NewRepository(runner))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -651,7 +651,7 @@ func TestApp_RemoveWorkspace_Safety(t *testing.T) {
 		t.Fatalf("failed to initialize NativeRunner: %v", err)
 	}
 
-	application := app.NewApp(runner)
+	application := app.NewApp(git.NewRepository(runner))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

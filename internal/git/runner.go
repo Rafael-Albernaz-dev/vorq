@@ -60,9 +60,10 @@ func (r *NativeRunner) Exec(ctx context.Context, dir string, args ...string) (st
 		cmd.Dir = dir
 	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := &cappedOutput{limit: MaxCommandOutput}
+	stderr := &cappedOutput{limit: 64 * 1024}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	if err := cmd.Run(); err != nil {
 		errStr := strings.TrimSpace(stderr.String())
@@ -72,7 +73,13 @@ func (r *NativeRunner) Exec(ctx context.Context, dir string, args ...string) (st
 		if errStr == "" {
 			errStr = err.Error()
 		}
+		if ctx.Err() != nil {
+			err = errors.Join(err, ctx.Err())
+		}
 		return "", fmt.Errorf("git error [%v]: %s: %w", args, errStr, err)
+	}
+	if stdout.truncated {
+		return "", &OutputLimitError{Limit: MaxCommandOutput}
 	}
 
 	return stdout.String(), nil
@@ -99,20 +106,40 @@ func (r *NativeRunner) Status(ctx context.Context, wsDir string) (string, error)
 
 // AheadBehind queries commits ahead and behind upstream. Returns (0, 0, nil) if no upstream is set.
 func (r *NativeRunner) AheadBehind(ctx context.Context, wsDir string) (int, int, error) {
+	branch, err := r.CurrentBranch(ctx, wsDir)
+	if err != nil {
+		var exit *exec.ExitError
+		if ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() == 1 {
+			if _, headErr := r.RevParseHead(ctx, wsDir); headErr == nil {
+				return 0, 0, nil
+			}
+		}
+		return 0, 0, err
+	}
+	upstream, err := r.Exec(ctx, wsDir, "for-each-ref", "--format=%(upstream)", "refs/heads/"+branch)
+	if err != nil {
+		return 0, 0, err
+	}
+	if strings.TrimSuffix(upstream, "\n") == "" {
+		return 0, 0, nil
+	}
 	out, err := r.Exec(ctx, wsDir, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
 	if err != nil {
-		// Typically means no upstream configured, which is normal for local branches.
-		return 0, 0, nil
+		return 0, 0, err
 	}
 
 	fields := strings.Fields(strings.TrimSpace(out))
 	if len(fields) != 2 {
-		return 0, 0, nil
+		return 0, 0, fmt.Errorf("invalid ahead/behind metadata")
 	}
 
 	var ahead, behind int
-	fmt.Sscanf(fields[0], "%d", &ahead)
-	fmt.Sscanf(fields[1], "%d", &behind)
+	if _, err := fmt.Sscanf(fields[0], "%d", &ahead); err != nil {
+		return 0, 0, err
+	}
+	if _, err := fmt.Sscanf(fields[1], "%d", &behind); err != nil {
+		return 0, 0, err
+	}
 	return ahead, behind, nil
 }
 
@@ -178,7 +205,13 @@ func (r *NativeRunner) Commit(ctx context.Context, wsDir string, message string)
 		return "", fmt.Errorf("commit message must not be empty")
 	}
 	if _, err := r.Exec(ctx, wsDir, "commit", "-m", message); err != nil {
-		return "", err
+		// OutputLimitError is emitted only after a successful native exit.
+		// Commit output is informational; never turn an already created commit
+		// into a retryable failure just because its output was oversized.
+		var limit *OutputLimitError
+		if !errors.As(err, &limit) {
+			return "", err
+		}
 	}
 	hash, err := r.RevParseHead(ctx, wsDir)
 	if err != nil {
@@ -260,8 +293,8 @@ func (r *NativeRunner) FileDiff(ctx context.Context, wsDir, path string, staged 
 	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = wsDir
 	out := &cappedOutput{limit: 256 * 1024}
-	var stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = out, &stderr
+	stderr := &cappedOutput{limit: 64 * 1024}
+	cmd.Stdout, cmd.Stderr = out, stderr
 	if err := cmd.Run(); err != nil {
 		return "", false, fmt.Errorf("read file diff: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
@@ -279,16 +312,20 @@ func (r *NativeRunner) BranchExists(ctx context.Context, repoDir string, branch 
 	if err == nil {
 		return true, nil
 	}
-	return false, nil
+	var exit *exec.ExitError
+	if ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
 }
 
 // WorktreeAdd provisions a new Git worktree.
 func (r *NativeRunner) WorktreeAdd(ctx context.Context, repoDir, branch, targetPath, baseBranch string, checkoutExisting bool) error {
 	var args []string
 	if checkoutExisting {
-		args = []string{"worktree", "add", targetPath, branch}
+		args = []string{"worktree", "add", "--", targetPath, branch}
 	} else {
-		args = []string{"worktree", "add", "-b", branch, targetPath, baseBranch}
+		args = []string{"worktree", "add", "-b", branch, "--", targetPath, baseBranch}
 	}
 
 	_, err := r.Exec(ctx, repoDir, args...)
@@ -301,7 +338,7 @@ func (r *NativeRunner) WorktreeRemove(ctx context.Context, repoDir, targetPath s
 	if force {
 		args = append(args, "--force")
 	}
-	args = append(args, targetPath)
+	args = append(args, "--", targetPath)
 
 	_, err := r.Exec(ctx, repoDir, args...)
 	return err
@@ -318,7 +355,7 @@ func (r *NativeRunner) BranchDelete(ctx context.Context, repoDir, branch string,
 	if force {
 		flag = "-D"
 	}
-	_, err := r.Exec(ctx, repoDir, "branch", flag, branch)
+	_, err := r.Exec(ctx, repoDir, "branch", flag, "--", branch)
 	return err
 }
 
@@ -333,11 +370,14 @@ func (r *NativeRunner) IgnoredFiles(ctx context.Context, wsDir string) ([]string
 		return nil, nil
 	}
 
-	tokens := strings.Split(out, "\x00")
+	changes, err := ParseStatus(out, wsDir, "")
+	if err != nil {
+		return nil, err
+	}
 	var ignored []string
-	for _, t := range tokens {
-		if strings.HasPrefix(t, "!! ") {
-			path := strings.TrimPrefix(t, "!! ")
+	for _, file := range changes.Files {
+		if file.Staged == "!" && file.Unstaged == "!" {
+			path := file.Path
 			if path != "" && path != ".git/" && path != ".git" {
 				ignored = append(ignored, path)
 			}

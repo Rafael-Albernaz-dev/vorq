@@ -1,6 +1,7 @@
 package git
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
@@ -17,17 +18,32 @@ func ParseStatus(output string, wsPath string, branch string) (*domain.ChangeSet
 	if len(output) == 0 {
 		return changeSet, nil
 	}
+	if !strings.HasSuffix(output, "\x00") {
+		return nil, fmt.Errorf("truncated porcelain status output")
+	}
 
 	tokens := strings.Split(output, "\x00")
 	for i := 0; i < len(tokens); i++ {
 		entry := tokens[i]
 		if len(entry) == 0 {
+			if i != len(tokens)-1 {
+				return nil, fmt.Errorf("empty porcelain status record")
+			}
 			continue
 		}
 
 		// Minimum porcelain entry: 2 status chars + 1 space + at least 1 path char = 4 chars
-		if len(entry) < 3 {
-			continue
+		if len(entry) < 4 || entry[2] != ' ' || !strings.ContainsRune(" MADRCUT?!", rune(entry[0])) || !strings.ContainsRune(" MADRCUT?!", rune(entry[1])) {
+			return nil, fmt.Errorf("invalid porcelain status record")
+		}
+		if entry[:2] == "  " {
+			return nil, fmt.Errorf("unchanged file in porcelain status")
+		}
+		if (entry[0] == '?' || entry[1] == '?') && entry[:2] != "??" {
+			return nil, fmt.Errorf("invalid untracked status")
+		}
+		if (entry[0] == '!' || entry[1] == '!') && entry[:2] != "!!" {
+			return nil, fmt.Errorf("invalid ignored status")
 		}
 
 		staged := string(entry[0])
@@ -46,6 +62,8 @@ func ParseStatus(output string, wsPath string, branch string) (*domain.ChangeSet
 			if i+1 < len(tokens) && tokens[i+1] != "" {
 				origPath = tokens[i+1]
 				i++ // consume the extra token
+			} else {
+				return nil, fmt.Errorf("rename/copy status missing source path")
 			}
 		}
 

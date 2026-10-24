@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -28,11 +27,10 @@ func (a *App) GetPushTarget(ctx context.Context, currentDir string) (*domain.Pus
 		return nil, err
 	}
 	// Upstream atoms preserve remote names and destination branches containing /.
-	upstream, err := a.gitRunner.Exec(ctx, proj.RootPath, "for-each-ref", "--format=%(upstream:remotename)%00%(upstream:remoteref)", "refs/heads/"+branch)
+	remote, remoteRef, err := a.gitRunner.UpstreamTarget(ctx, proj.RootPath, branch)
 	if err != nil {
 		return nil, err
 	}
-	remote, remoteRef, _ := strings.Cut(strings.TrimSuffix(upstream, "\n"), "\x00")
 	target := &domain.PushTarget{WorkspacePath: proj.RootPath, Branch: branch, HeadHash: head, Ahead: -1}
 	if remote != "" && strings.HasPrefix(remoteRef, "refs/heads/") {
 		target.Remote, target.RemoteBranch, target.HasUpstream = remote, strings.TrimPrefix(remoteRef, "refs/heads/"), true
@@ -59,11 +57,10 @@ func (a *App) GetPushTarget(ctx context.Context, currentDir string) (*domain.Pus
 			return nil, fmt.Errorf("multiple remotes and no origin/upstream; configure the branch upstream explicitly before publishing")
 		}
 	}
-	urls, err := a.gitRunner.Exec(ctx, proj.RootPath, "remote", "get-url", "--push", "--all", target.Remote)
+	target.DestinationID, err = a.gitRunner.PushDestinationID(ctx, proj.RootPath, target.Remote)
 	if err != nil {
 		return nil, fmt.Errorf("cannot resolve push destination for remote %q", target.Remote)
 	}
-	target.DestinationID = fmt.Sprintf("%x", sha256.Sum256([]byte(urls)))
 	return target, nil
 }
 

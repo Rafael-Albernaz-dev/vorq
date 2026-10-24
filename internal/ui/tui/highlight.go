@@ -1,14 +1,12 @@
 package tui
 
 import (
-	"bytes"
 	"context"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
-	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -60,44 +58,45 @@ func highlightCodeLinesContext(ctx context.Context, filename, source, theme stri
 	if ctx.Err() != nil {
 		return plain
 	}
-	lexer := lexers.Match(filename)
-	if name := filepath.Base(filename); name == "go.mod" || name == "go.sum" || name == "go.work" {
-		lexer = goManifestLexer
+	spans, grammarAvailable := parseSyntaxSpans(ctx, filename, source)
+	iterator := plainSourceIterator(source)
+	if !grammarAvailable {
+		lexer := lexers.Match(filename)
+		if name := filepath.Base(filename); name == "go.mod" || name == "go.sum" || name == "go.work" {
+			lexer = goManifestLexer
+		}
+		if lexer == nil {
+			lexer = lexers.Analyse(source)
+		}
+		if lexer == nil {
+			lexer = lexers.Fallback
+		}
+		var err error
+		iterator, err = chroma.Coalesce(lexer).Tokenise(nil, source)
+		if err != nil {
+			return plain
+		}
+		// Unknown/deep/timed-out grammars keep the bounded Chroma fallback.
+		filtered := spans[:0]
+		for _, span := range spans {
+			if span.role.Category() == chroma.Name {
+				filtered = append(filtered, span)
+			}
+		}
+		spans = filtered
 	}
-	if lexer == nil {
-		lexer = lexers.Analyse(source)
-	}
-	if lexer == nil {
-		lexer = lexers.Fallback
-	}
-	iterator, err := chroma.Coalesce(lexer).Tokenise(nil, source)
+	iterator = withSymbolRoles(iterator, spans)
+	style := highlightStyle(theme)
+	rendered, err := renderSyntaxTokens(ctx, style, iterator, len(source))
 	if err != nil {
 		return plain
 	}
-	iterator = withSymbolRoles(iterator, structuralSpans(ctx, filename, source))
-	style := highlightStyle(theme)
-	formatter := formatters.Get("terminal256")
-	var out bytes.Buffer
-	checked := func() chroma.Token {
-		if ctx.Err() != nil {
-			return chroma.EOF
-		}
-		return iterator()
-	}
-	if err := formatter.Format(&out, style, checked); err != nil || ctx.Err() != nil {
-		return plain
-	}
 	// terminal256 closes every token (and physical newline) with an SGR reset.
-	result := strings.Split(syntaxBackground.ReplaceAllString(out.String(), ""), "\n")
+	result := strings.Split(rendered, "\n")
 	if len(result) < len(plain) {
 		return plain
 	}
 	result = result[:len(plain)]
-	for i := range result {
-		// 39 resets only the foreground. Mark syntax colours so the chrome's
-		// palette translation cannot remap a coincidentally equal ANSI colour.
-		result[i] = strings.ReplaceAll(result[i], "\x1b[38;5;", "\x1b[39;38;5;")
-	}
 	return result
 }
 

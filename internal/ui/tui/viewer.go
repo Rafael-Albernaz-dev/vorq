@@ -41,6 +41,12 @@ type viewerState struct {
 	lineBackgrounds         []lipgloss.Color
 }
 
+// Inactive worktrees retain navigation, never file contents, tree snapshots or
+// highlighted buffers. Returning to one reloads it through the core.
+func (v viewerState) navigationOnly() viewerState {
+	return viewerState{path: v.path, mode: v.mode, offset: v.offset, column: v.column, positions: v.positions}
+}
+
 var hunkPattern = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
 
 func (v *viewerState) setMode(mode string) {

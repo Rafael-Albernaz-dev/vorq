@@ -12,7 +12,7 @@ import (
 )
 
 // Run always restores the terminal through Bubble Tea's normal shutdown path.
-func Run(ctx context.Context, core app.Service, dir string, input io.Reader, output io.Writer, modes ...IconMode) error {
+func Run(ctx context.Context, core app.StudioService, dir string, input io.Reader, output io.Writer, modes ...IconMode) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	model := NewModel(ctx, core, dir)

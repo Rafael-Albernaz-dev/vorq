@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
-	"github.com/Rafael-Albernaz-dev/vorq/internal/git"
 )
 
 // PrepareDiscard never mutates. It accepts one changed regular file, never a
@@ -45,20 +44,19 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 			return nil, fmt.Errorf("descarte bloqueado para links, diretórios e submódulos: %q", path)
 		}
 	}
-	ignored, err := a.gitRunner.Exec(ctx, proj.RootPath, "--literal-pathspecs", "ls-files", "--cached", "--others", "--ignored", "--exclude-standard", "-z", "--", path)
+	ignored, err := a.gitRunner.IgnoredPath(ctx, proj.RootPath, path)
 	if err != nil {
 		return nil, err
 	}
-	if ignored != "" {
+	if ignored {
 		return nil, fmt.Errorf("arquivo ignorado protegido: %q", path)
 	}
-	raw, err := a.gitRunner.Exec(ctx, proj.RootPath, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames")
+	cs, err := a.gitRunner.ReadChanges(ctx, proj.RootPath, "")
 	if err != nil {
 		return nil, err
 	}
-	cs, err := git.ParseStatus(raw, proj.RootPath, "")
-	if err != nil {
-		return nil, err
+	if cs == nil {
+		return nil, fmt.Errorf("workspace status unavailable")
 	}
 	var status *domain.FileStatus
 	for _, f := range cs.Files {
@@ -74,11 +72,11 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 	if status.IsConflicted() || status.OrigPath != "" || strings.ContainsAny(status.Staged+status.Unstaged, "RCT") {
 		return nil, fmt.Errorf("descarte bloqueado para renames, conflitos e mudanças de tipo: %q", path)
 	}
-	index, err := a.gitRunner.Exec(ctx, proj.RootPath, "--literal-pathspecs", "ls-files", "--stage", "-z", "--", path)
+	index, err := a.gitRunner.IndexEntry(ctx, proj.RootPath, path)
 	if err != nil {
 		return nil, err
 	}
-	if strings.HasPrefix(index, "160000 ") || strings.HasPrefix(index, "120000 ") {
+	if index != nil && (index.Mode == "160000" || index.Mode == "120000") {
 		return nil, fmt.Errorf("descarte de submódulo ou link simbólico bloqueado")
 	}
 	plan := &domain.DiscardPlan{WorkspacePath: proj.RootPath, Path: path, Delete: status.IsUntracked() || status.Staged == "A", Staged: status.IsStaged()}
@@ -90,7 +88,7 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 		plan.Impact = "Este arquivo novo será excluído permanentemente do disco; sua preparação no stage também será removida."
 	}
 	hash := sha256.New()
-	fmt.Fprintf(hash, "%q\x00%q\x00%q\x00", *status, index, plan.WorkspacePath)
+	fmt.Fprintf(hash, "%q\x00%#v\x00%q\x00", *status, index, plan.WorkspacePath)
 	// HEAD participates in review identity for tracked files; unborn new files
 	// require no HEAD and can still be discarded safely after confirmation.
 	if !plan.Delete {
@@ -98,11 +96,11 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 		if err != nil {
 			return nil, err
 		}
-		entry, err := a.gitRunner.Exec(ctx, proj.RootPath, "--literal-pathspecs", "ls-tree", "--full-tree", "-z", head, "--", path)
+		entry, err := a.gitRunner.TreeEntry(ctx, proj.RootPath, head, path)
 		if err != nil {
 			return nil, err
 		}
-		if strings.HasPrefix(entry, "160000 ") || strings.HasPrefix(entry, "120000 ") {
+		if entry != nil && (entry.Mode == "160000" || entry.Mode == "120000") {
 			return nil, fmt.Errorf("descarte de submódulo ou link simbólico bloqueado, inclusive quando excluído")
 		}
 		fmt.Fprint(hash, head)
@@ -158,7 +156,7 @@ func (a *App) DiscardFile(ctx context.Context, currentDir string, plan domain.Di
 	}
 	if plan.Delete {
 		if plan.Staged {
-			if _, err := a.gitRunner.Exec(ctx, plan.WorkspacePath, "--literal-pathspecs", "rm", "--cached", "-f", "--", plan.Path); err != nil {
+			if err := a.gitRunner.RemoveIndexEntry(ctx, plan.WorkspacePath, plan.Path); err != nil {
 				return err
 			}
 		}
@@ -172,10 +170,5 @@ func (a *App) DiscardFile(ctx context.Context, currentDir string, plan domain.Di
 		}
 		return nil
 	}
-	args := []string{"--literal-pathspecs", "restore", "--worktree"}
-	if plan.Staged {
-		args = append(args, "--source=HEAD", "--staged")
-	}
-	_, err = a.gitRunner.Exec(ctx, plan.WorkspacePath, append(args, "--", plan.Path)...)
-	return err
+	return a.gitRunner.RestoreFile(ctx, plan.WorkspacePath, plan.Path, plan.Staged)
 }

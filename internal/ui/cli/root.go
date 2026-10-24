@@ -86,9 +86,15 @@ func NewRootCmd() *cobra.Command {
 	// Wire application core
 	gitRunner, err := git.NewNativeRunner()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+			if cmd == rootCmd && showVersion {
+				return nil
+			}
+			return err
+		}
+	} else {
+		appCore = app.NewApp(git.NewRepository(gitRunner))
 	}
-	appCore = app.NewApp(gitRunner)
 
 	rootCmd.AddCommand(newUpCmd(appCore, &icons))
 
@@ -112,7 +118,7 @@ func Execute() {
 	}
 }
 
-func newUpCmd(appCore *app.App, icons *string) *cobra.Command {
+func newUpCmd(appCore app.StudioService, icons *string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "up [dir]",
 		Aliases: []string{"tui", "studio", "open"},
@@ -130,7 +136,7 @@ func newUpCmd(appCore *app.App, icons *string) *cobra.Command {
 	}
 }
 
-func runStudio(cmd *cobra.Command, core app.Service, dir string, icons string) error {
+func runStudio(cmd *cobra.Command, core app.StudioService, dir string, icons string) error {
 	mode, err := tui.ParseIconMode(icons)
 	if err != nil {
 		return err
@@ -138,7 +144,7 @@ func runStudio(cmd *cobra.Command, core app.Service, dir string, icons string) e
 	return tui.Run(cmd.Context(), core, dir, cmd.InOrStdin(), cmd.OutOrStdout(), mode)
 }
 
-func newDoctorCmd(appCore *app.App) *cobra.Command {
+func newDoctorCmd(appCore app.ProjectService) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Verify environment health, native Git installation, and current workspace",
@@ -165,7 +171,10 @@ func newDoctorCmd(appCore *app.App) *cobra.Command {
 	}
 }
 
-func newListCmd(appCore *app.App) *cobra.Command {
+func newListCmd(appCore interface {
+	app.ProjectService
+	app.WorkspaceReader
+}) *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -279,7 +288,7 @@ func newListCmd(appCore *app.App) *cobra.Command {
 	}
 }
 
-func newStatusCmd(appCore *app.App) *cobra.Command {
+func newStatusCmd(appCore app.WorkspaceReader) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status [workspace]",
 		Short: "Display workspace status, changes, and staged diffs",
@@ -372,7 +381,7 @@ func newStatusCmd(appCore *app.App) *cobra.Command {
 	}
 }
 
-func newSpawnCmd(appCore *app.App) *cobra.Command {
+func newSpawnCmd(appCore app.WorkspaceService) *cobra.Command {
 	var baseBranch string
 	var targetDir string
 	var checkoutExisting bool
@@ -419,7 +428,10 @@ func newSpawnCmd(appCore *app.App) *cobra.Command {
 	return cmd
 }
 
-func newCommitCmd(appCore app.Service) *cobra.Command {
+func newCommitCmd(appCore interface {
+	app.CommitService
+	app.StageService
+}) *cobra.Command {
 	var all, dryRun bool
 	var commitType, message string
 	cmd := &cobra.Command{
@@ -625,7 +637,7 @@ func selectCommitFiles(reader *bufio.Reader, out io.Writer, files []domain.FileS
 	}
 }
 
-func newPushCmd(appCore app.Service) *cobra.Command {
+func newPushCmd(appCore app.PushService) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "push",
@@ -681,7 +693,7 @@ func newPushCmd(appCore app.Service) *cobra.Command {
 	return cmd
 }
 
-func newRmCmd(appCore *app.App) *cobra.Command {
+func newRmCmd(appCore app.WorkspaceService) *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
@@ -730,7 +742,7 @@ func newRmCmd(appCore *app.App) *cobra.Command {
 	return cmd
 }
 
-func newPruneCmd(appCore *app.App) *cobra.Command {
+func newPruneCmd(appCore app.WorkspaceService) *cobra.Command {
 	return &cobra.Command{
 		Use:   "prune",
 		Short: "Prune linked worktrees information from Git database",

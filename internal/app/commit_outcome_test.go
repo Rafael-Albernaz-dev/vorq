@@ -61,7 +61,7 @@ func TestApp_Commit_MetadataFailurePreservesCreatedResult(t *testing.T) {
 			}
 			cause := errors.New("metadata read unavailable")
 			runner := &metadataFailureRunner{Runner: native, mode: mode, cause: cause}
-			result, err := app.NewApp(runner).CreateCommit(ctx, dir, "feat: proposed subject")
+			result, err := app.NewApp(git.NewRepository(runner)).CreateCommit(ctx, dir, "feat: proposed subject")
 			var outcome *domain.CommitMetadataError
 			if err == nil || !errors.As(err, &outcome) {
 				t.Fatalf("expected typed post-commit failure, got %+v / %v", result, err)
@@ -124,7 +124,7 @@ func TestApp_Commit_PropagatesCreatedOutcomeWithoutHash(t *testing.T) {
 	}
 	cause := errors.New("HEAD unavailable")
 	runner := &metadataFailureRunner{Runner: native, mode: "head", cause: cause}
-	result, err := app.NewApp(runner).CreateCommit(ctx, dir, "feat: already created")
+	result, err := app.NewApp(git.NewRepository(runner)).CreateCommit(ctx, dir, "feat: already created")
 	var outcome *domain.CommitMetadataError
 	if result != nil || !errors.As(err, &outcome) || !errors.Is(err, cause) || outcome.Hash != "" {
 		t.Fatalf("lost unknown-hash created outcome: %+v %v", result, err)
