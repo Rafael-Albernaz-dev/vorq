@@ -63,7 +63,7 @@ func setupStudio(t *testing.T) (*Model, *observedService, *git.NativeRunner, str
 	writeStudio(t, dir, ".env", "private\n")
 	writeStudio(t, dir, "bin/ignored", "ignored\n")
 	core := &observedService{Service: app.NewApp(r)}
-	m := NewModel(ctx, core, dir, false)
+	m := NewModel(ctx, core, dir)
 	drive(t, m, m.refresh())
 	selectPath(t, m, "file.go")
 	return m, core, r, dir, remote
@@ -186,14 +186,14 @@ func TestModel_ViewerTabsAndSeparateDiffs(t *testing.T) {
 	if m.viewerTab != "stage" {
 		t.Fatal("Tab did not restore previous diff tab")
 	}
-	if !strings.Contains(stage, "3 │+// changed") {
+	if !strings.Contains(stage, "3 + // changed") {
 		t.Fatalf("missing added-line number: %s", stage)
 	}
 }
 
 func TestModel_StageCommitMultilineAndNoPush(t *testing.T) {
 	m, core, r, dir, _ := setupStudio(t)
-	if NewModel(context.Background(), core, dir, false).Init() == nil {
+	if NewModel(context.Background(), core, dir).Init() == nil {
 		t.Fatal("missing initial commands")
 	}
 	cmd := press(m, "s")
@@ -506,7 +506,7 @@ func TestSafeTextPaletteAndIcons(t *testing.T) {
 	}
 	for name, want := range map[string]string{"main.go": "[GO]", "README.md": "[MD]", "config.json": "[JSON]", ".env.example": "[ENV]"} {
 		node := &domain.TreeNode{Name: name}
-		if got := fileIcon(node, false, false); got != want {
+		if got := fileIcon(node, false); got != want {
 			t.Fatalf("icon %q != %q", got, want)
 		}
 	}
@@ -536,7 +536,7 @@ func TestStudio_ProgramLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var out bytes.Buffer
-	if err := Run(ctx, core, dir, strings.NewReader("q"), &out, false); err != nil {
+	if err := Run(ctx, core, dir, strings.NewReader("q"), &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "\x1b[?1049h") || !strings.Contains(out.String(), "\x1b[?1049l") {

@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -17,6 +16,7 @@ type treeRow struct {
 	depth   int
 	group   string
 	heading string
+	count   int
 }
 type treePosition struct {
 	path, group      string
@@ -127,42 +127,15 @@ func (m *Model) rebuildTree() {
 			if len(group.files) == 0 {
 				continue
 			}
-			m.rows = append(m.rows, treeRow{group: group.key, heading: fmt.Sprintf("%s  %d", group.title, len(group.files))})
-			root := &domain.TreeNode{IsDir: true}
-			nodes := map[string]*domain.TreeNode{"": root}
+			m.rows = append(m.rows, treeRow{group: group.key, heading: group.title, count: len(group.files)})
 			for _, f := range group.files {
-				parent := root
-				prefix := ""
-				parts := strings.Split(f.Path, "/")
-				for i, part := range parts {
-					prefix = path.Join(prefix, part)
-					node := nodes[prefix]
-					if node == nil {
-						node = &domain.TreeNode{Name: part, Path: prefix, IsDir: i < len(parts)-1}
-						nodes[prefix] = node
-						parent.Children = append(parent.Children, node)
-					}
-					if node.IsDir {
-						key := group.key + "/" + prefix
-						if _, ok := m.expanded[key]; !ok {
-							m.expanded[key] = true
-						}
-					}
-					parent = node
+				node := &domain.TreeNode{
+					Name:   path.Base(f.Path),
+					Path:   f.Path,
+					IsDir:  false,
+					Status: f,
 				}
-				parent.Status = f
-			}
-			for _, node := range nodes {
-				sort.Slice(node.Children, func(i, j int) bool {
-					a, b := node.Children[i], node.Children[j]
-					if a.IsDir != b.IsDir {
-						return a.IsDir
-					}
-					return a.Name < b.Name
-				})
-			}
-			for _, node := range root.Children {
-				walk(node, 0, group.key)
+				m.rows = append(m.rows, treeRow{node: node, depth: 0, group: group.key})
 			}
 		}
 	}
@@ -216,50 +189,57 @@ func displayName(name string) string {
 	return name
 }
 
-func fileIcon(node *domain.TreeNode, open, nerd bool) string {
+func fileIcon(node *domain.TreeNode, open bool) string {
 	if node.IsDir {
-		if nerd {
-			if open {
-				return ""
-			}
-			return ""
-		}
 		if open {
 			return "▾ [DIR]"
 		}
 		return "▸ [DIR]"
 	}
+	name := strings.ToLower(node.Name)
 	ext := strings.ToLower(path.Ext(node.Name))
-	env := strings.HasPrefix(node.Name, ".env")
-	if nerd {
-		if env {
-			return "󰒓"
-		}
-		switch ext {
-		case ".go":
-			return ""
-		case ".md":
-			return ""
-		case ".json", ".yaml", ".yml", ".toml":
-			return "󰒓"
-		}
-		return ""
+	token := "[FILE]"
+	switch {
+	case strings.HasPrefix(name, ".env"):
+		token = "[ENV]"
+	case name == "go.mod" || name == "go.sum":
+		token = "[MOD]"
+	case name == ".gitignore" || name == ".gitattributes" || name == ".gitmodules":
+		token = "[GIT]"
+	case name == "license" || name == "licence" || ext == ".txt":
+		token = "[TXT]"
+	case ext == ".go":
+		token = "[GO]"
+	case ext == ".tsx":
+		token = "[TSX]"
+	case ext == ".jsx":
+		token = "[JSX]"
+	case ext == ".ts" || ext == ".mts" || ext == ".cts":
+		token = "[TS]"
+	case ext == ".js" || ext == ".mjs" || ext == ".cjs":
+		token = "[JS]"
+	case ext == ".py" || ext == ".pyi":
+		token = "[PY]"
+	case ext == ".html" || ext == ".htm":
+		token = "[HTML]"
+	case ext == ".css":
+		token = "[CSS]"
+	case ext == ".md" || ext == ".markdown":
+		token = "[MD]"
+	case ext == ".json" || ext == ".jsonc":
+		token = "[JSON]"
+	case ext == ".yaml" || ext == ".yml":
+		token = "[YML]"
+	case ext == ".sh" || ext == ".bash" || ext == ".zsh":
+		token = "[SH]"
+	case ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" || ext == ".svg" || ext == ".ico":
+		token = "[IMG]"
+	case ext == ".toml" || ext == ".ini" || ext == ".conf":
+		token = "[ENV]"
 	}
-	if env {
-		return "[ENV]"
-	}
-	switch ext {
-	case ".go":
-		return "[GO]"
-	case ".md":
-		return "[MD]"
-	case ".json":
-		return "[JSON]"
-	case ".yaml", ".yml", ".toml", ".ini":
-		return "[CFG]"
-	}
-	return "[FILE]"
+	return token
 }
+
 func statusBadge(f domain.FileStatus) string {
 	if f.IsConflicted() {
 		return redStyle.Render("U")
@@ -273,7 +253,13 @@ func statusBadge(f domain.FileStatus) string {
 	if f.IsUntracked() {
 		return cyanStyle.Render("?")
 	}
-	if f.Unstaged == "M" || f.Staged == "M" || f.Unstaged == "T" || f.Staged == "T" {
+	if f.Staged == "C" || f.Unstaged == "C" {
+		return purpleStyle.Render("C")
+	}
+	if f.Staged == "T" || f.Unstaged == "T" {
+		return yellowStyle.Render("T")
+	}
+	if f.Unstaged == "M" || f.Staged == "M" {
 		return yellowStyle.Render("M")
 	}
 	if f.IsStaged() {
@@ -282,13 +268,16 @@ func statusBadge(f domain.FileStatus) string {
 	return dimStyle.Render("·")
 }
 func stageMarker(f domain.FileStatus) string {
+	if f.IsConflicted() {
+		return redStyle.Render("[!]")
+	}
+	if f.IsStaged() && f.IsUnstaged() {
+		return yellowStyle.Render("[-]")
+	}
 	if f.IsStaged() {
-		if f.IsUnstaged() || f.IsUntracked() {
-			return yellowStyle.Render("[-]")
-		}
 		return greenStyle.Render("[x]")
 	}
-	if f.IsUnstaged() || f.IsUntracked() || f.IsConflicted() {
+	if f.IsUnstaged() || f.IsUntracked() {
 		return dimStyle.Render("[ ]")
 	}
 	return "   "
@@ -300,9 +289,14 @@ func (m *Model) treeView(width int) string {
 		if index >= len(m.rows) {
 			text := ""
 			if len(m.rows) == 0 && i == 1 {
-				if m.activeTab == "alteracoes" {
+				switch {
+				case m.loading:
+					text = "Lendo inventário…"
+				case m.studio == nil || m.stale:
+					text = "Inventário indisponível · r para atualizar"
+				case m.activeTab == "alteracoes":
 					text = "✓ Repositório limpo"
-				} else {
+				default:
 					text = "Repositório sem arquivos"
 				}
 			}
@@ -311,7 +305,9 @@ func (m *Model) treeView(width int) string {
 		}
 		row := m.rows[index]
 		if row.node == nil {
-			lines[i] = surface(accentStyle.Render(" "+row.heading), width, ColorRaised)
+			count := fmt.Sprint(row.count)
+			heading := fit(" ▾ "+strings.ToUpper(row.heading), max(0, width-len(count)-1)) + " " + count
+			lines[i] = surface(dimStyle.Render(heading), width, ColorPanel)
 			continue
 		}
 		marker := " "
@@ -319,13 +315,19 @@ func (m *Model) treeView(width int) string {
 			marker = "›"
 		}
 		node := row.node
-		icon := fileIcon(node, m.expanded[row.group+"/"+node.Path], m.nerdFonts)
-		label := marker + strings.Repeat(" ", row.depth) + " " + cyanStyle.Render(icon) + " " + displayName(node.Name)
-		badge := ""
-		if !node.IsDir {
-			badge = stageMarker(node.Status) + " " + statusBadge(node.Status)
+		icon := nodeIcon(node, m.expanded[row.group+"/"+node.Path], m.currentIconMode())
+		var label string
+		if node.IsDir {
+			label = marker + " " + strings.Repeat("  ", row.depth) + cyanStyle.Render(icon) + " " + displayName(node.Name)
+			count := dimStyle.Render(fmt.Sprint(node.FileCount()))
+			label = fit(label, max(1, width-lipgloss.Width(count)-1)) + " " + count
+		} else {
+			iconWidth := 6
+			if m.currentIconMode() != IconModeText {
+				iconWidth = 2
+			}
+			label = marker + statusBadge(node.Status) + " " + stageMarker(node.Status) + " " + strings.Repeat("  ", row.depth) + cyanStyle.Render(fit(icon, iconWidth)) + " " + displayName(node.Name)
 		}
-		label = fit(label, max(1, width-lipgloss.Width(badge)-1)) + " " + badge
 		bg := ColorPanel
 		if index == m.selected {
 			bg = ColorSelection

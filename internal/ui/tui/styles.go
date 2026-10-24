@@ -24,6 +24,8 @@ var (
 	ColorBar         = lipgloss.Color("#2e4270")
 	ColorBarText     = lipgloss.Color("#ffffff")
 	ColorCyan        = lipgloss.Color("#7dcfff")
+	ColorAddedBg     = lipgloss.Color("#292f2d")
+	ColorDeletedBg   = lipgloss.Color("#322531")
 	textStyle        = lipgloss.NewStyle().Foreground(ColorText)
 	dimStyle         = lipgloss.NewStyle().Foreground(ColorMuted)
 	accentStyle      = lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
@@ -32,7 +34,7 @@ var (
 	redStyle         = lipgloss.NewStyle().Foreground(ColorRed)
 	cyanStyle        = lipgloss.NewStyle().Foreground(ColorCyan)
 	purpleStyle      = lipgloss.NewStyle().Foreground(ColorPurple)
-	activeTabStyle   = lipgloss.NewStyle().Foreground(ColorAccent).Background(ColorRaised).Bold(true)
+	activeTabStyle   = lipgloss.NewStyle().Foreground(ColorAccent).Background(ColorBg)
 	inactiveTabStyle = lipgloss.NewStyle().Foreground(ColorMuted).Background(ColorPanel)
 )
 
@@ -50,6 +52,44 @@ func surface(s string, width int, bg lipgloss.Color) string {
 	// background after each reset so every cell retains the panel color.
 	content := strings.ReplaceAll(fit(s, width), "\x1b[0m", "\x1b[0m"+prefix)
 	return prefix + content + "\x1b[0m"
+}
+
+// tabWidths is shared with mouse hit testing. All cells have one owner.
+func tabWidths(labels []string, width int) []int {
+	widths := make([]int, len(labels))
+	remaining := max(0, width)
+	for i := range labels {
+		widths[i] = remaining / (len(labels) - i)
+		remaining -= widths[i]
+	}
+	return widths
+}
+
+// renderTabs keeps the selected top edge and straight grid borders visible.
+// It has exactly three rows, including in plain/no-color terminals.
+func renderTabs(labels []string, active, width int) string {
+	widths := tabWidths(labels, width)
+	var top, middle, bottom strings.Builder
+	for i, label := range labels {
+		w := widths[i]
+		if w == 0 {
+			continue
+		}
+		style, border, bg := inactiveTabStyle, dimStyle, ColorPanel
+		if i == active {
+			style, border, bg = activeTabStyle, accentStyle, ColorBg
+		}
+		if w < 2 {
+			top.WriteString(surface(border.Render("─"), w, bg))
+			middle.WriteString(surface(style.Render(label), w, bg))
+			bottom.WriteString(surface(border.Render("─"), w, bg))
+			continue
+		}
+		top.WriteString(surface(border.Render("┌"+strings.Repeat("─", w-2)+"┐"), w, bg))
+		middle.WriteString(surface(border.Render("│")+style.Render(fit(" "+label, w-2))+border.Render("│"), w, bg))
+		bottom.WriteString(surface(dimStyle.Render("└"+strings.Repeat("─", w-2)+"┘"), w, bg))
+	}
+	return top.String() + "\n" + middle.String() + "\n" + bottom.String()
 }
 
 func tabLabel(label string, active bool) string {
@@ -85,7 +125,8 @@ func fit(s string, width int) string {
 }
 
 func overlay(base, dialog string, width, height int) string {
-	lines := strings.Split(base, "\n")
+	// A modal owns focus; mute the underlying snapshot without hiding context.
+	lines := strings.Split(surfaceDim(base), "\n")
 	box := strings.Split(dialog, "\n")
 	w := lipgloss.Width(dialog)
 	x, y := max(0, (width-w)/2), max(0, (height-len(box))/2)
@@ -95,6 +136,14 @@ func overlay(base, dialog string, width, height int) string {
 			break
 		}
 		lines[row] = fit(ansi.Cut(lines[row], 0, x), x) + line + ansi.Cut(lines[row], x+w, width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func surfaceDim(base string) string {
+	lines := strings.Split(ansi.Strip(base), "\n")
+	for i, line := range lines {
+		lines[i] = lipgloss.NewStyle().Foreground(ColorLine).Background(ColorBg).Render(line)
 	}
 	return strings.Join(lines, "\n")
 }

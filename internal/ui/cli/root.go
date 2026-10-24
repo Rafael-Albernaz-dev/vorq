@@ -55,27 +55,10 @@ var (
 			BorderForeground(lipgloss.Color("#44475A"))
 )
 
-func autoDetectNerdFonts() bool {
-	if v := os.Getenv("VORQ_NERD_FONTS"); v != "" {
-		return v == "1" || strings.ToLower(v) == "true"
-	}
-	if v := os.Getenv("GITGUIA_NERD_FONTS"); v != "" {
-		return v == "1" || strings.ToLower(v) == "true"
-	}
-	term := strings.ToLower(os.Getenv("TERM"))
-	termProg := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	if strings.Contains(term, "kitty") || strings.Contains(term, "alacritty") ||
-		strings.Contains(termProg, "wezterm") || strings.Contains(termProg, "ghostty") ||
-		strings.Contains(termProg, "warp") || strings.Contains(termProg, "iterm") {
-		return true
-	}
-	return false
-}
-
 // NewRootCmd initializes the root Cobra command and its subcommands.
 func NewRootCmd() *cobra.Command {
 	var showVersion bool
-	var nerdFonts bool
+	var icons string
 	var appCore *app.App
 
 	rootCmd := &cobra.Command{
@@ -92,12 +75,13 @@ func NewRootCmd() *cobra.Command {
 					version.Version, version.GitCommit, version.BuildDate)
 				return nil
 			}
-			return tui.Run(cmd.Context(), appCore, ".", cmd.InOrStdin(), cmd.OutOrStdout(), nerdFonts)
+			return runStudio(cmd, appCore, ".", icons)
 		},
 	}
 
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show vorq version")
-	rootCmd.PersistentFlags().BoolVar(&nerdFonts, "nerd-fonts", autoDetectNerdFonts(), "Usar ícones Nerd Font na TUI (auto-detectado ou alternado com 'i')")
+
+	rootCmd.PersistentFlags().StringVar(&icons, "icons", "emoji", "Ícones da TUI: emoji ou text")
 
 	// Wire application core
 	gitRunner, err := git.NewNativeRunner()
@@ -106,7 +90,7 @@ func NewRootCmd() *cobra.Command {
 	}
 	appCore = app.NewApp(gitRunner)
 
-	rootCmd.AddCommand(newUpCmd(appCore, &nerdFonts))
+	rootCmd.AddCommand(newUpCmd(appCore, &icons))
 
 	// Add subcommands
 	rootCmd.AddCommand(newDoctorCmd(appCore))
@@ -128,7 +112,7 @@ func Execute() {
 	}
 }
 
-func newUpCmd(appCore *app.App, nerdFonts *bool) *cobra.Command {
+func newUpCmd(appCore *app.App, icons *string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "up [dir]",
 		Aliases: []string{"tui", "studio", "open"},
@@ -141,9 +125,17 @@ func newUpCmd(appCore *app.App, nerdFonts *bool) *cobra.Command {
 			if len(args) > 0 {
 				targetDir = args[0]
 			}
-			return tui.Run(cmd.Context(), appCore, targetDir, cmd.InOrStdin(), cmd.OutOrStdout(), *nerdFonts)
+			return runStudio(cmd, appCore, targetDir, *icons)
 		},
 	}
+}
+
+func runStudio(cmd *cobra.Command, core app.Service, dir string, icons string) error {
+	mode, err := tui.ParseIconMode(icons)
+	if err != nil {
+		return err
+	}
+	return tui.Run(cmd.Context(), core, dir, cmd.InOrStdin(), cmd.OutOrStdout(), mode)
 }
 
 func newDoctorCmd(appCore *app.App) *cobra.Command {

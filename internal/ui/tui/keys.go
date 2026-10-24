@@ -14,11 +14,19 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	}
 	if m.modal != "" {
 		if m.modal != "worktrees" && (s == "pgdown" || s == "down" || s == "j") {
-			m.modalScroll += max(1, m.height-10)
+			delta := 1
+			if s == "pgdown" {
+				delta = m.modalBodyHeight()
+			}
+			m.modalScroll += delta
 			return nil
 		}
 		if m.modal != "worktrees" && (s == "pgup" || s == "up" || s == "k") {
-			m.modalScroll = max(0, m.modalScroll-max(1, m.height-10))
+			delta := 1
+			if s == "pgup" {
+				delta = m.modalBodyHeight()
+			}
+			m.modalScroll = max(0, m.modalScroll-delta)
 			return nil
 		}
 		if s == "esc" {
@@ -27,6 +35,10 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 				return nil
 			}
 			m.dialogID++
+			if m.dialogCancel != nil {
+				m.dialogCancel()
+			}
+			m.discardPlan = nil
 			m.busy = ""
 			if m.modal == "commit" || m.modal == "suggest" {
 				m.notice = "Revisão cancelada. Os arquivos permanecem em stage."
@@ -41,7 +53,31 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		switch m.modal {
-		case "help", "error":
+		case "appearance":
+			if s == "i" {
+				m.cycleIcons()
+			}
+			for i := range studioPalettes {
+				if s == string(rune('1'+i)) {
+					return m.selectTheme(i)
+				}
+			}
+		case "discard":
+			if s == "enter" {
+				return m.discard(false)
+			}
+			if s == "u" {
+				return m.discard(true)
+			}
+		case "unstage":
+			if s == "enter" {
+				if n := m.selectedNode(); n != nil {
+					m.partialApproved = n.Path
+				}
+				m.modal = ""
+				return m.stage()
+			}
+		case "help", "error", "result":
 			if s == "?" || s == "enter" {
 				m.modal = ""
 			}
@@ -126,8 +162,13 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		m.modalScroll = 0
 		return nil
 	}
+	if s == "t" {
+		m.modal = "appearance"
+		m.modalScroll = 0
+		return nil
+	}
 	if s == "i" {
-		m.nerdFonts = !m.nerdFonts
+		m.cycleIcons()
 		return nil
 	}
 	if s == "a" || s == "e" {
@@ -206,6 +247,23 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	}
 	if s == "s" && !m.loading {
 		return m.stage()
+	}
+	if s == "A" {
+		return m.stageAll(false)
+	}
+	if s == "U" {
+		return m.stageAll(true)
+	}
+	if s == "x" || s == "d" {
+		return m.inspectDiscard()
+	}
+	if s == "pgup" && m.focusPane == "tree" {
+		m.moveTree(-m.bodyHeight())
+		return m.loadSelected()
+	}
+	if s == "pgdown" && m.focusPane == "tree" {
+		m.moveTree(m.bodyHeight())
+		return m.loadSelected()
 	}
 	if s == "pgup" {
 		m.viewer.scroll(-m.bodyHeight(), m.bodyHeight())
@@ -286,6 +344,9 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 }
 
 func (m *Model) openSuggestion() {
+	if !m.canAct() {
+		return
+	}
 	if m.changeSummary().Staged == 0 {
 		m.notice = "Nenhum arquivo no stage para sugerir mensagem."
 		return
