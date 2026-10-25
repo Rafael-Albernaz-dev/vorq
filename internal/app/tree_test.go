@@ -55,9 +55,13 @@ func TestApp_WorkspaceTree_StatusAndIgnores(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{".git", "bin", "node_modules", ".env"} {
-		if findTreeNode(tree.Root, path) != nil {
-			t.Fatalf("ignored path visible: %s", path)
+	if findTreeNode(tree.Root, ".git") != nil {
+		t.Fatal("Git metadata visible")
+	}
+	for _, path := range []string{"bin", "node_modules", ".env"} {
+		n := findTreeNode(tree.Root, path)
+		if n == nil || n.Tracking != "ignored" {
+			t.Fatalf("ignored path missing/unclassified: %s", path)
 		}
 	}
 	node := findTreeNode(tree.Root, "src/ação.go")

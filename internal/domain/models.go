@@ -221,6 +221,10 @@ func (f FileStatus) IsDeleted() bool { return f.Staged == "D" || f.Unstaged == "
 
 // TreeNode paths are always relative to the current workspace root.
 type TreeNode struct {
+	Tracking       string      `json:"tracking,omitempty"` // tracked, untracked, ignored, mixed
+	Lazy           bool        `json:"lazy,omitempty"`
+	MoreOffset     int         `json:"more_offset,omitempty"`
+	More           bool        `json:"more,omitempty"`
 	Name           string      `json:"name"`
 	Path           string      `json:"path"`
 	IsDir          bool        `json:"is_dir"`
@@ -232,8 +236,11 @@ type TreeNode struct {
 	DeletedCount   int         `json:"deleted_count"`
 }
 
-// FileCount excludes directories and includes the complete repository inventory.
+// FileCount counts currently loaded files; lazy directories may contain more.
 func (n *TreeNode) FileCount() int {
+	if n.More {
+		return 0
+	}
 	if !n.IsDir {
 		return 1
 	}
@@ -242,6 +249,18 @@ func (n *TreeNode) FileCount() int {
 		count += child.FileCount()
 	}
 	return count
+}
+
+func (n *TreeNode) InventoryIncomplete() bool {
+	if n.Lazy || n.More {
+		return true
+	}
+	for _, c := range n.Children {
+		if c.InventoryIncomplete() {
+			return true
+		}
+	}
+	return false
 }
 
 type WorkspaceTree struct {
