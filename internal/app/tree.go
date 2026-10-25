@@ -16,8 +16,8 @@ import (
 
 const FilePreviewLimit = 256 * 1024
 
-// GetWorkspaceTree lists tracked and non-ignored untracked paths through Git.
-// This avoids traversing .git, ignored dependencies and external symlink targets.
+// GetWorkspaceTree lists Git paths and collapsed ignored directories.
+// Ignored descendants load on demand; metadata and symlink targets stay closed.
 func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.WorkspaceTree, error) {
 	proj, err := a.ResolveProject(ctx, currentDir)
 	if err != nil {
@@ -86,6 +86,35 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 		}
 	}
 	for _, node := range nodes {
+		node.Tracking = "tracked"
+		if node.Status.IsUntracked() {
+			node.Tracking = "untracked"
+		}
+	}
+	ignored, err := a.gitRunner.IgnoredFiles(ctx, proj.RootPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range ignored {
+		isDir := strings.HasSuffix(path, "/")
+		path = strings.TrimSuffix(path, "/")
+		if path == "" {
+			continue
+		}
+		existing := nodes[path]
+		if node := insert(path); node != nil {
+			if existing != nil {
+				node.Tracking = "mixed"
+			} else {
+				node.Tracking = "ignored"
+			}
+			if isDir {
+				node.IsDir = true
+				node.Lazy = true
+			}
+		}
+	}
+	for _, node := range nodes {
 		sort.Slice(node.Children, func(i, j int) bool {
 			a, b := node.Children[i], node.Children[j]
 			if a.IsDir != b.IsDir {
@@ -114,6 +143,15 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 			n.UnstagedCount += child.UnstagedCount
 			n.UntrackedCount += child.UntrackedCount
 			n.DeletedCount += child.DeletedCount
+		}
+		if n.IsDir && !n.Lazy && len(n.Children) > 0 {
+			kind := n.Children[0].Tracking
+			for _, child := range n.Children[1:] {
+				if child.Tracking != kind {
+					kind = "mixed"
+				}
+			}
+			n.Tracking = kind
 		}
 	}
 	aggregate(root)
