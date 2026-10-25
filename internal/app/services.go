@@ -49,6 +49,7 @@ type DiscardService interface {
 // Service remains the full application contract for composition and clients
 // needing every workflow. Consumers depend on the smaller contracts above.
 type Service interface {
+	BranchSwitchService
 	PullService
 	WorkflowService
 	ProjectService
@@ -63,6 +64,7 @@ type Service interface {
 
 // StudioService excludes provisioning, teardown, CLI preview and direct commit.
 type StudioService interface {
+	BranchSwitchService
 	PullService
 	WorkflowService
 	StageService

@@ -6,6 +6,9 @@ import (
 
 func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 	s := key.String()
+	if m.modal == "branches" && s != "esc" && s != "q" {
+		return m.branchSelectorKey(key)
+	}
 	if m.modal != "worktrees" && (s == "pgdown" || s == "down" || s == "j") {
 		delta := 1
 		if s == "pgdown" {
@@ -32,6 +35,7 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			m.dialogCancel()
 		}
 		m.discardPlan = nil
+		m.branchSwitchPlan = nil
 		m.busy = ""
 		if m.modal == "commit" || m.modal == "suggest" {
 			m.notice = "Revisão cancelada. Os arquivos permanecem em stage."
@@ -89,6 +93,10 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 				}
 				return m.switchWorkspace(w.Path)
 			}
+		}
+	case "switch-branch":
+		if s == "enter" {
+			return m.switchBranch()
 		}
 	case "pull":
 		if s == "enter" {

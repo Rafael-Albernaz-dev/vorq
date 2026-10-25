@@ -41,6 +41,9 @@ type commitState struct {
 	suggested                                                  bool
 }
 type dialogState struct {
+	localBranches                            []domain.LocalBranch
+	branchIndex                              int
+	branchSwitchPlan                         *domain.BranchSwitchPlan
 	resultKind, resultBody, modal, lastError string
 	modalScroll                              int
 	discardPlan                              *domain.DiscardPlan

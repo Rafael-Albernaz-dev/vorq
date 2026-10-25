@@ -372,6 +372,26 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar · e editar · Esc cancelar sem unstage"
 		buttons = "[Confirmar]  [Editar]  [Voltar]"
+	case "branches":
+		title = "TROCAR BRANCH · BRANCHES LOCAIS"
+		body = "Carregando branches…"
+		if m.busy == "" {
+			rows, _ := m.branchModalRows()
+			body = strings.Join(rows, "\n")
+			if len(rows) == 0 {
+				body = "Nenhuma branch local disponível."
+			}
+		}
+		help = "Clique ou ↑/↓ escolher · Enter revisar · Esc voltar"
+		buttons = "[Revisar] [Voltar]"
+	case "switch-branch":
+		title = "REVISAR TROCA DE BRANCH"
+		body = "Verificando destino e estado local…"
+		if p := m.branchSwitchPlan; p != nil {
+			body = fmt.Sprintf("Origem: %s\nDestino: %s\n\nWorkspace: %s\n\nTroca local com workspace limpo. Stage e arquivos ignorados são protegidos. Nenhum stash, descarte ou acesso à rede.", p.From, p.Target, p.WorkspacePath)
+		}
+		help = "Enter confirmar troca · Esc cancelar"
+		buttons = "[Confirmar] [Voltar]"
 	case "pull":
 		title = "ATUALIZAR BRANCH · FAST-FORWARD"
 		body = "Inspecionando origem e estado local…"

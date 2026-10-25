@@ -41,6 +41,34 @@ func tick() tea.Cmd {
 }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case branchesMsg:
+		if msg.id != m.dialogID {
+			return m, nil
+		}
+		m.busy = ""
+		if msg.err != nil {
+			m.showError("Branches locais", msg.err)
+			return m, nil
+		}
+		m.localBranches = msg.branches
+		m.branchIndex = 0
+		for i, b := range m.localBranches {
+			if b.Current {
+				m.branchIndex = i
+			}
+		}
+		return m, nil
+	case branchSwitchPlanMsg:
+		if msg.id != m.dialogID {
+			return m, nil
+		}
+		m.busy = ""
+		if msg.err != nil {
+			m.showError("Troca de branch bloqueada", msg.err)
+			return m, nil
+		}
+		m.branchSwitchPlan = msg.plan
+		return m, nil
 	case workflowMsg:
 		return m, m.updateWorkflow(msg)
 	case workflowDetailMsg:

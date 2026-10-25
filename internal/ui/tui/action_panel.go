@@ -49,7 +49,7 @@ func (m *Model) actionTabs(width int) string {
 func (m *Model) panelActions() []panelAction {
 	switch m.activeRightTab() {
 	case "git":
-		return []panelAction{{"Nova branch", "Criar e entrar em uma branch.", "b"}, {"Histórico de commits", "Ver branches, merges e diffs.", "H"}, {"Revisar push ↑", "Conferir destino antes de publicar.", "p"}, {"Atualizar branch ↓", "Buscar e aplicar somente fast-forward.", "pull"}}
+		return []panelAction{{"Nova branch", "Criar e entrar em uma branch.", "b"}, {"Trocar branch", "Escolher uma branch local existente.", "switch-branch"}, {"Histórico de commits", "Ver branches, merges e diffs.", "H"}, {"Revisar push ↑", "Conferir destino antes de publicar.", "p"}, {"Atualizar branch ↓", "Buscar e aplicar somente fast-forward.", "pull"}}
 	case "prs":
 		return []panelAction{{"Listar PRs", "Consultar PRs, checks e revisões.", "P"}, {"Criar PR", "Preparar título, descrição e revisão.", "new-pr"}}
 	case "worktrees":
@@ -60,7 +60,10 @@ func (m *Model) panelActions() []panelAction {
 func (m *Model) actionRows(width int) []actionRow {
 	actions := m.panelActions()
 	h := m.panelHeight()
-	rows := []actionRow{{m.actionTabs(width), -1}, {surface(dimStyle.Render(" Escolha uma ação"), width, ColorPanel), -1}, {surface("", width, ColorPanel), -1}}
+	rows := []actionRow{{m.actionTabs(width), -1}, {surface(dimStyle.Render(" Escolha uma ação"), width, ColorPanel), -1}}
+	if h >= len(actions)+4 {
+		rows = append(rows, actionRow{surface("", width, ColorPanel), -1})
+	}
 	descriptions := h >= len(actions)*2+4
 	for i, a := range actions {
 		style := cyanStyle
@@ -96,6 +99,8 @@ func (m *Model) runPanelAction(index int) tea.Cmd {
 	}
 	m.commitEditing = false
 	switch actions[index].key {
+	case "switch-branch":
+		return m.inspectBranches()
 	case "new-pr":
 		return m.preparePR()
 	case "pull":

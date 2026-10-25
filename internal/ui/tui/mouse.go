@@ -304,6 +304,9 @@ func fieldCursorAt(value string, width, row, column, offset int) int {
 }
 
 func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
+	if m.modal == "branches" {
+		return m.branchSelectorMouse(msg)
+	}
 	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
 		delta := 3
 		if msg.Button == tea.MouseButtonWheelUp {
