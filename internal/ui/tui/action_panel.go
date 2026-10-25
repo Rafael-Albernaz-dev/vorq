@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-var rightTabs = []string{"Commit", "Git", "PRs", "Worktrees"}
-var rightTabIDs = []string{"commit", "git", "prs", "worktrees"}
+var rightTabs = []string{"Commit", "IA", "Git", "PRs", "Worktrees"}
+var rightTabIDs = []string{"commit", "ai", "git", "prs", "worktrees"}
 
 type panelAction struct{ label, detail, key string }
 type actionRow struct {
@@ -48,6 +48,8 @@ func (m *Model) actionTabs(width int) string {
 }
 func (m *Model) panelActions() []panelAction {
 	switch m.activeRightTab() {
+	case "ai":
+		return []panelAction{{"Provedor e modelo", "Escolher Codex ou Gemini.", "ai-configure"}, {"Sugerir mensagem", "Analisar somente o stage.", "ai-suggest"}, {"Revisar diff", "Revisão das mudanças elegíveis.", "ai-review"}, {"Organizar commits", "Propor grupos e mensagens.", "ai-plan"}, {"Revisar plano", "Editar, aprovar ou retomar.", "ai-saved"}}
 	case "git":
 		return []panelAction{{"Nova branch", "Criar e entrar em uma branch.", "b"}, {"Trocar branch", "Escolher uma branch local existente.", "switch-branch"}, {"Histórico de commits", "Ver branches, merges e diffs.", "H"}, {"Revisar push ↑", "Conferir destino antes de publicar.", "p"}, {"Atualizar branch ↓", "Buscar e aplicar somente fast-forward.", "pull"}}
 	case "prs":
@@ -99,6 +101,16 @@ func (m *Model) runPanelAction(index int) tea.Cmd {
 	}
 	m.commitEditing = false
 	switch actions[index].key {
+	case "ai-configure":
+		return m.openAIAction("configure")
+	case "ai-suggest":
+		return m.openAIAction("suggest")
+	case "ai-review":
+		return m.openAIAction("review")
+	case "ai-plan":
+		return m.openAIAction("plan")
+	case "ai-saved":
+		return m.loadAutomationPlan()
 	case "switch-branch":
 		return m.inspectBranches()
 	case "new-pr":

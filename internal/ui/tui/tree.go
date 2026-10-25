@@ -318,15 +318,42 @@ func (m *Model) treeView(width int) string {
 		icon := nodeIcon(node, m.expanded[row.group+"/"+node.Path], m.currentIconMode())
 		var label string
 		if node.IsDir {
-			label = marker + " " + strings.Repeat("  ", row.depth) + cyanStyle.Render(icon) + " " + displayName(node.Name)
-			count := dimStyle.Render(fmt.Sprint(node.FileCount()))
+			name := displayName(node.Name)
+			if m.activeTab == "repositorio" {
+				if node.Tracking == "ignored" {
+					name = dimStyle.Render("! " + name)
+				}
+				if node.Tracking == "untracked" {
+					name = cyanStyle.Render("? " + name)
+				}
+			}
+			label = marker + " " + strings.Repeat("  ", row.depth) + cyanStyle.Render(icon) + " " + name
+			countText := fmt.Sprint(node.FileCount())
+			if node.InventoryIncomplete() {
+				countText += "+"
+			}
+			if node.Lazy {
+				countText = "…"
+			}
+			count := dimStyle.Render(countText)
 			label = fit(label, max(1, width-lipgloss.Width(count)-1)) + " " + count
 		} else {
 			iconWidth := 6
 			if m.currentIconMode() != IconModeText {
 				iconWidth = 2
 			}
-			label = marker + statusBadge(node.Status) + " " + stageMarker(node.Status) + " " + strings.Repeat("  ", row.depth) + cyanStyle.Render(fit(icon, iconWidth)) + " " + displayName(node.Name)
+			name := displayName(node.Name)
+			badge := statusBadge(node.Status)
+			if m.activeTab == "repositorio" {
+				if node.Tracking == "untracked" {
+					name = cyanStyle.Render(name)
+				}
+				if node.Tracking == "ignored" {
+					name = dimStyle.Render(name)
+					badge = dimStyle.Render("!")
+				}
+			}
+			label = marker + badge + " " + stageMarker(node.Status) + " " + strings.Repeat("  ", row.depth) + cyanStyle.Render(fit(icon, iconWidth)) + " " + name
 		}
 		bg := ColorPanel
 		if index == m.selected {

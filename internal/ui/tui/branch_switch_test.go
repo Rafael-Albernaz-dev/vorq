@@ -31,7 +31,7 @@ func TestBranchSwitchMouseReviewCancelAndConfirm(t *testing.T) {
 	drive(t, m, m.refresh())
 	m.commitSummary = "feat: draft stays"
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 42})
-	clickPanelTab(t, m, 1)
+	clickPanelTab(t, m, 2)
 	for _, confirm := range []bool{false, true} {
 		drive(t, m, clickPanelAction(t, m, "Trocar branch"))
 		if m.modal != "branches" {
@@ -100,7 +100,7 @@ func TestBranchSwitchLayoutsAndButtonReachability(t *testing.T) {
 	drive(t, m, m.refresh())
 	for _, size := range [][2]int{{50, 14}, {80, 24}, {160, 42}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		clickPanelTab(t, m, 1)
+		clickPanelTab(t, m, 2)
 		drive(t, m, clickPanelAction(t, m, "Trocar branch"))
 		for _, line := range strings.Split(m.modalView(), "\n") {
 			if ansi.StringWidth(line) > m.width {

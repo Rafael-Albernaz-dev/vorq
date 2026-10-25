@@ -31,7 +31,18 @@ func (m *Model) UpdateTree(tree *domain.WorkspaceTree) tea.Cmd {
 	m.dir = tree.Workspace.Path
 	m.rebuildTree()
 	m.restoreSelection(p)
-	return m.loadSelected()
+	commands := []tea.Cmd{m.loadSelected()}
+	var walk func(*domain.TreeNode)
+	walk = func(n *domain.TreeNode) {
+		if n.Lazy && m.expanded["/"+n.Path] {
+			commands = append(commands, m.readInventory(n.Path, 0))
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(tree.Root)
+	return tea.Batch(commands...)
 }
 
 func (m *Model) saveWorkspaceContext() {

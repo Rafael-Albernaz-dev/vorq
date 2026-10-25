@@ -125,7 +125,7 @@ func assertFrame(t *testing.T, m *Model) {
 
 func TestModel_TabsInventoryAndCleanFile(t *testing.T) {
 	m, core, _, _, _ := setupStudio(t)
-	if m.activeTab != "alteracoes" || m.changeSummary().Total != 1 || m.inventoryCount != 6 {
+	if m.activeTab != "alteracoes" || m.changeSummary().Total != 1 || m.inventoryCount != 7 {
 		t.Fatalf("inventory %d, summary %+v", m.inventoryCount, m.changeSummary())
 	}
 	for _, row := range m.rows {
@@ -143,7 +143,7 @@ func TestModel_TabsInventoryAndCleanFile(t *testing.T) {
 			seen[row.node.Path] = true
 		}
 	}
-	if !seen[".github"] || !seen[".gitignore"] || seen[".git"] || seen[".env"] || seen["bin"] {
+	if !seen[".github"] || !seen[".gitignore"] || seen[".git"] || !seen[".env"] || !seen["bin"] {
 		t.Fatalf("inventory visibility: %v", seen)
 	}
 	selectPath(t, m, "config.json")

@@ -35,6 +35,9 @@ func (m *Model) loadSelected() tea.Cmd {
 	m.fileID++
 	id := m.fileID
 	node := m.selectedNode()
+	if node != nil && node.More {
+		return nil
+	}
 	if node != nil && node.IsDir {
 		m.viewerTab = "arquivo"
 		m.viewer = viewerState{path: node.Path, mode: "arquivo", directory: node}

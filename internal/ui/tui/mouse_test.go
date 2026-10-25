@@ -401,7 +401,7 @@ func TestMouse_MinimumCommitPaneControlsMatchVisibleRows(t *testing.T) {
 	if cmd := press(m, "q"); cmd != nil || m.commitDescription != "q" {
 		t.Fatal("minimum description treated q as exit")
 	}
-	x, y := mouseLabelPosition(t, m.View(), "Tipo:")
+	x, y := mouseLabelPosition(t, m.View(), "Sugerir com IA")
 	mousePress(m, x+1, y)
 	if m.modal != "suggest" || core.commitCalls != 0 {
 		t.Fatal("minimum type row opened review or executed commit")

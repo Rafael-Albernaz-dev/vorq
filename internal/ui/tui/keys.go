@@ -233,10 +233,8 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		return m.loadSelected()
 	case "enter", " ", "right", "l":
 		if node := m.selectedNode(); node != nil {
-			if node.IsDir {
-				k := m.expandedKey()
-				m.expanded[k] = !m.expanded[k]
-				m.rebuildTree()
+			if node.IsDir || node.More {
+				return m.expandInventory(node)
 			} else {
 				m.focusPane = "viewer"
 			}
@@ -264,11 +262,8 @@ func (m *Model) openSuggestion() {
 	if !m.canAct() {
 		return
 	}
-	if m.changeSummary().Staged == 0 {
-		m.notice = "Nenhum arquivo no stage para sugerir mensagem."
-		return
-	}
 	m.rightTab = "commit"
+	m.aiTask = "suggest"
 	m.modal = "suggest"
 	m.modalScroll = 0
 	m.commitPhase = "type"
