@@ -18,6 +18,7 @@ type Model struct {
 	dialogState
 	appearanceState
 	workspaceState
+	workflowState
 }
 
 func NewModel(ctx context.Context, core app.StudioService, dir string) *Model {
@@ -40,6 +41,10 @@ func tick() tea.Cmd {
 }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case workflowMsg:
+		return m, m.updateWorkflow(msg)
+	case workflowDetailMsg:
+		return m, m.updateWorkflowDetail(msg)
 	case appearanceMsg:
 		var cmd tea.Cmd
 		if msg.next != nil {
@@ -55,7 +60,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.keepTreeVisible()
 	case tickMsg:
 		m.frame++
-		if !m.loading && !m.viewer.loading && !m.mutating && m.busy == "" && m.modal == "" && time.Since(m.lastRefresh) > 5*time.Second {
+		if !m.loading && !m.viewer.loading && !m.mutating && m.busy == "" && m.modal == "" && m.screen == "" && time.Since(m.lastRefresh) > 5*time.Second {
 			return m, tea.Batch(m.refresh(), tick())
 		}
 		return m, tick()
@@ -163,6 +168,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reviewMessage = m.draftMessage()
 		m.commitCount = msg.changes.Summary().Staged
 		m.commitPhase = "review"
+	case pullTargetMsg:
+		if msg.id != m.dialogID {
+			return m, nil
+		}
+		m.busy = ""
+		if msg.err != nil {
+			m.showError("Atualização bloqueada", msg.err)
+			return m, nil
+		}
+		m.pullTarget = msg.target
 	case pushTargetMsg:
 		if msg.id != m.dialogID {
 			return m, nil
@@ -200,7 +215,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.modal = ""
 			m.notice = msg.notice
-			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push") {
+			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull") {
 				m.modal = "result"
 				m.resultKind = msg.kind
 				m.resultBody = msg.notice
@@ -220,6 +235,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commitEditing = false
 				m.commitField = "summary"
 			}
+		}
+		if msg.kind == "pr" && msg.err == nil && m.screen == "prs" {
+			return m, m.loadPRs()
 		}
 		return m, m.refresh()
 	case tea.MouseMsg:

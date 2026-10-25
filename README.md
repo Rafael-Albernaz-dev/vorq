@@ -31,6 +31,10 @@ Modern development shouldn't require spinning up **1.5 GB+ RAM Electron applicat
   - **Instant 1-Key Staging (`s`):** Stage or unstage files asynchronously without freezing the UI. Use `A` / `U` for all files.
   - **Guided Conventional Commits (`c`):** Built-in deterministic heuristic proposing conventional commit messages (`feat:`, `fix:`, `chore:`) inferred from staged changes and directory scopes.
   - **Explicit Push Modal (`p`):** Visual confirmation showing `Local -> Remote` target and ahead/behind counts before touching the network.
+  - **Repository Header:** Centered, credential-free link to the opened repository; click it or press `o` to open the browser.
+  - **New Branch (`b`):** Review a name and base, then create and switch by default. Stage, working files and ignored files remain protected.
+  - **Commit Graph (`H`):** Browse branches, tags, merges and commit patches; page through the local history and search/filter without automatic fetch.
+  - **Pull Requests (`P`):** Explicit GitHub queries, checks, reviews, comments, and reviewed create/edit forms through authenticated `gh`.
   - **Live Worktree Switcher (`w`):** Switch between active workspaces and branches on the fly without exiting the studio.
 - **Safe Worktree Lifecycle Management (`spawn`, `list`, `rm`):**
   - Provision isolated workspaces in dedicated directories, automatically replicating declared unversioned files (`.env`, config files).
@@ -161,6 +165,39 @@ vorq rm feat/my-new-task
 
 ---
 
+## Branches, history and pull requests
+
+The right panel has clickable **Commit / Git / PRs / Worktrees** tabs. Commit retains the message editor; Git offers branch creation, history, push review and branch updates; PRs offers list/create actions; Worktrees opens the existing workspace chooser. Switching tabs preserves the commit draft and performs no GitHub/network operation. Buttons open the same flows as keyboard shortcuts. In compact mode, click **Ações** in the top pane navigation first. With the right pane focused and outside text editing, Left/Right switches tabs and Up/Down/Tab selects an action; Enter opens it.
+
+Click the **↑ ahead** counter beside the branch to review a push, or the **↓ behind** counter to review a fast-forward update. Neither click immediately transfers commits. Counts describe locally known refs and can be stale. Updating requires an attached branch, configured upstream and a clean workspace (including untracked files); ignored-file collisions are refused. After confirmation, vorq fetches the selected remote branch, checks HEAD/source/status again, and applies the fetched commit using fast-forward only. Divergence is refused; no merge commit, rebase, automatic stash or discard is performed. Fetch can update remote-tracking refs even if application is later blocked. The same workflow is available as `vorq pull`, with a displayed source and explicit `y` confirmation (`--yes` for scripts).
+
+Press `b` in the Studio to create a branch, `H` for history, or `P` for PRs. Form input treats letters (including `q`) as text: `Tab` changes fields, `Ctrl+U` clears a field, `Ctrl+S` opens review, and `Enter` confirms from review. `Esc` cancels. Branch creation enters the new branch by default; choose another base only with a clean workspace. Ignored-file collisions are refused even with an otherwise clean status. New branches require an existing first commit.
+
+History shows the locally available Git graph, including a detached HEAD. Use `n` / `[` for next/previous pages, `/` to search messages or filter a ref, and `PgUp` / `PgDown` to scroll commit details. The shallow-clone indicator describes history availability; remote-tracking refs may be stale. No fetch runs automatically. Commit patches are previews capped at 256 KiB with a visible notice when truncated.
+
+In history, `P` lists PRs and enriches matching head/merge commits with PR badges; `v` searches GitHub for PRs containing the selected commit. This also supports investigating squash/rebase histories without inventing a merge relationship from commit messages. PR lists default to all states and 100 results; `/` refines state/search and `n` expands the explicit limit up to 500. In the PR screen, `Enter` fetches details, `c` creates, and `e` edits. `Esc` returns to history or the commit workspace. Small terminals show a compact form with the active field; `Tab` still reaches every field.
+
+GitHub features require [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated with `gh auth login`. Git-only features work without it. This version supports `github.com` remotes; it does not manage tokens or create an authentication store. Remote selection prefers the current branch's upstream remote, then `origin`, then the sole remote; ambiguous or non-web remotes have no header link. SSH aliases are not guessed.
+
+PR creation detects the base from the remote HEAD or GitHub default branch and drafts the title/body from local commits. Review title, multiline description, base, draft state, labels and reviewers before submitting. Editing supports title/body/base, adding labels/reviewers, and removing labels. Existing labels/reviewers remain unless explicitly changed. Creation requires the current HEAD already published under the same branch name on the selected remote; use the separate Push action first. A failed/timed-out PR submission can have a partial server result: inspect the list before retrying. Merge, rebase, cherry-pick, branch deletion and PR draft-state conversion are outside this workflow.
+
+```bash
+vorq branch feat/my-change             # create and enter
+vorq branch feat/later --stay --base main
+vorq tree --limit 100
+vorq tree --skip 100 --limit 100
+vorq tree --ref main --search 'fix:'
+vorq tree --commit <full-commit-hash>
+vorq pr list --state all --limit 100
+vorq pr view 12
+vorq pr create --base main --draft --title 'feat: my change' --body-file pr.md
+vorq pr edit 12 --title 'Updated title' --body-file pr.md --label bug
+```
+
+PR writes display the repository, branches and fields before asking for `y`; EOF does not confirm. `--yes` is available for intentional noninteractive submission. Neither branch creation nor PR creation performs a push.
+
+---
+
 ## 🗺️ Roadmap & Slices
 
 - [x] **VORQ-001 — Foundation:** Core architecture, domain models, CLI skeleton, CI pipeline.
@@ -169,7 +206,8 @@ vorq rm feat/my-new-task
 - [x] **VORQ-004 — Safe Teardown:** Multi-vector safety audit preventing data loss on uncommitted or ignored files.
 - [x] **VORQ-005 — Guided Commits:** Per-file staging, deterministic Conventional Commits engine, and interactive CLI.
 - [x] **VORQ-007 — Explicit Push:** Target confirmation and separated publication flow.
-- [x] **VORQ-008 + VORQ-009 — Workspace Studio TUI:** Interactive Bubble Tea full-screen studio with file tree, diff viewer, and action modals.
+- [x] **VORQ-008 — Workspace Studio TUI:** Interactive Bubble Tea full-screen studio with file tree, diff viewer, and action modals.
+- [x] **VORQ-009 — Integrated Git Flow:** Repository link, branch creation, local commit graph and GitHub PR workflows in CLI/TUI.
 - [ ] **VORQ-006 — Local LLM Adapter:** Optional offline Ollama integration for commit drafting.
 
 ---

@@ -245,9 +245,10 @@ func (n *TreeNode) FileCount() int {
 }
 
 type WorkspaceTree struct {
-	Workspace Workspace  `json:"workspace"`
-	Root      *TreeNode  `json:"root"`
-	Changes   *ChangeSet `json:"changes"`
+	Repository *RepositoryLink `json:"repository,omitempty"`
+	Workspace  Workspace       `json:"workspace"`
+	Root       *TreeNode       `json:"root"`
+	Changes    *ChangeSet      `json:"changes"`
 }
 
 type FileContent struct {

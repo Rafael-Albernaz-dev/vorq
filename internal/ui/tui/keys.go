@@ -9,8 +9,15 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	if s == "ctrl+c" {
 		return tea.Quit
 	}
+	if m.modal == "workflow" {
+		return m.workflowFormKey(key)
+	}
 	if m.modal != "" {
 		return m.handleModalKey(key)
+	}
+
+	if m.screen != "" {
+		return m.workflowKey(key)
 	}
 
 	// Editing wins over every printable global shortcut, including q, a, e and s.
@@ -37,6 +44,9 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 			}
 		}
 		return nil
+	}
+	if handled, cmd := m.actionPaneKey(key); handled {
+		return cmd
 	}
 	if s == "q" {
 		return tea.Quit
@@ -102,6 +112,19 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	if s == "r" && !m.loading {
 		return m.refresh()
 	}
+	if s == "b" {
+		m.openBranchForm()
+		return nil
+	}
+	if s == "H" {
+		return m.openHistory()
+	}
+	if s == "P" {
+		return m.openPRs("")
+	}
+	if s == "o" {
+		return m.openRepository()
+	}
 	if s == "w" {
 		return m.inspectWorktrees()
 	}
@@ -116,9 +139,10 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		return m.review()
 	}
 	if s == "c" {
-		if m.focusPane == "commit" {
+		if m.focusPane == "commit" && m.activeRightTab() == "commit" {
 			return m.review()
 		}
+		m.rightTab = "commit"
 		m.focusPane = "commit"
 		m.commitField = "summary"
 		m.commitEditing = true
@@ -244,6 +268,7 @@ func (m *Model) openSuggestion() {
 		m.notice = "Nenhum arquivo no stage para sugerir mensagem."
 		return
 	}
+	m.rightTab = "commit"
 	m.modal = "suggest"
 	m.modalScroll = 0
 	m.commitPhase = "type"

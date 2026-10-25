@@ -35,11 +35,10 @@ func (m *Model) renderView() string {
 	if m.width < 50 || m.height < 14 {
 		return "vorq · Workspace Studio\nAmplie o terminal para pelo menos 50×14.\nq / Ctrl+C para sair."
 	}
-	mode := "amplo · 3 painéis"
-	if !m.isWide {
-		mode = "compacto · " + map[string]string{"tree": "navegação", "viewer": "viewer", "commit": "mensagem"}[m.focusPane]
+	if m.screen != "" {
+		return m.workflowView()
 	}
-	title := surface(accentStyle.Render(" vorq / MESA DE COMMIT")+fit("", max(1, m.width-ansi.StringWidth(mode)-24))+dimStyle.Render(mode), m.width, ColorRaised)
+	title := m.repositoryHeader()
 	branch := "carregando"
 	ahead, behind := 0, 0
 	if m.studio != nil {
@@ -92,14 +91,16 @@ func (m *Model) renderView() string {
 	if m.modal == "error" || m.stale {
 		notice = surface(" "+redStyle.Render(safeText(status)), m.width, ColorPanel)
 	}
-	shortcuts := " a Alterações  e Repositório  1 Trabalho  2 Stage  Tab Arquivo  s Stage  A: Stage tudo · U: Unstage tudo  x Descartar  c Mensagem  p Push  w Worktrees  ? Ajuda  q Sair"
+	shortcuts := " b Branch  H Histórico  P PRs  o GitHub  a Alterações  e Repositório  s Stage  A: Stage tudo · U: Unstage tudo  x Descartar  c Mensagem  p Push  w Worktrees  ? Ajuda  q Sair"
 	if m.width < 115 {
-		shortcuts = " a/e Visões  1/2 Diff  Tab Arquivo  ⇧Tab Foco  s Stage  A/U Tudo  x Descartar  c Commit  p Push  w Worktrees  q Sair"
+		shortcuts = " b Branch  H Histórico  P PRs  a/e Visões  s Stage  A/U Tudo  x Descartar  c Commit  p Push  w Worktrees  ? Ajuda"
 	}
 	if m.width < 80 {
-		shortcuts = " ⇧Tab Foco  a/e Visões  s Stage  A/U Tudo  x Descartar  c Commit  ?  q Sair"
+		shortcuts = " b Branch  H Histórico  P PRs  ⇧Tab Foco  s Stage  c Commit  ?  q"
 	}
-	if m.focusPane == "commit" {
+	if m.focusPane == "commit" && m.activeRightTab() != "commit" {
+		shortcuts = " ←/→ Abas  Tab/↑/↓ Ações  Enter Abrir  c Commit  Esc Navegação  q Sair"
+	} else if m.focusPane == "commit" {
 		shortcuts = " Tab Campos  Enter Editar  Ctrl+G Sugerir  Ctrl+S Revisar  Esc Navegação  Ctrl+C Sair"
 		if m.commitEditing {
 			shortcuts = " EDITANDO · Tab próximo campo · Esc encerrar edição · Ctrl+S revisar"
@@ -134,7 +135,7 @@ func boolIndex(b bool) int {
 	return 0
 }
 func (m *Model) compactNavigation() string {
-	labels := []string{"Arquivos", "Conteúdo", "Mensagem"}
+	labels := []string{"Arquivos", "Conteúdo", "Ações"}
 	panes := []string{"tree", "viewer", "commit"}
 	out := ""
 	for i, label := range labels {
@@ -241,10 +242,10 @@ func (m *Model) fieldBox(value string, cursor, width, rows int, field string) []
 	}
 	return append(lines, surface(border.Render("└"+strings.Repeat("─", width-2)+"┘"), width, ColorPanel))
 }
-func (m *Model) commitPane(width int) string {
+func (m *Model) commitEditorPane(width int) string {
 	h := m.panelHeight()
 	staged := m.changeSummary().Staged
-	header := surface(accentStyle.Render(" MENSAGEM DO COMMIT"), width, ColorPanel)
+	header := m.actionTabs(width)
 	ready := staged > 0 && strings.TrimSpace(m.commitSummary) != "" && !m.loading && !m.viewer.loading && !m.stale && m.changeSummary().Conflicts == 0 && m.busy == "" && !m.mutating
 	button := dimStyle
 	if ready {
@@ -300,9 +301,15 @@ func (m *Model) modalView() string {
 	width := min(90, m.width-6)
 	inner := width - 4
 	var title, body, help, buttons string
+	if m.modal == "workflow" {
+		return m.workflowFormView()
+	}
 	switch m.modal {
 	case "result":
 		title = "COMMIT LOCAL CONCLUÍDO"
+		if m.resultKind == "pull" {
+			title = "ATUALIZAÇÃO CONCLUÍDA"
+		}
 		if m.resultKind == "push" {
 			title = "PUSH CONCLUÍDO"
 		}
@@ -347,7 +354,7 @@ func (m *Model) modalView() string {
 		buttons = "[Confirmar]  [Voltar]"
 	case "help":
 		title = "ATALHOS · MESA DE COMMIT"
-		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees · r: atualizar\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
+		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees · r: atualizar\nPainel direito: abas Commit/Git/PRs/Worktrees clicáveis\nSetas da branch: ↑ revisar push · ↓ revisar atualização ff-only\nb: nova branch · H: histórico · P: PRs · o: abrir GitHub\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
 		help = "Esc fecha · PgUp/PgDown ou roda rola"
 		buttons = "[Voltar]"
 	case "suggest":
@@ -365,6 +372,15 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar · e editar · Esc cancelar sem unstage"
 		buttons = "[Confirmar]  [Editar]  [Voltar]"
+	case "pull":
+		title = "ATUALIZAR BRANCH · FAST-FORWARD"
+		body = "Inspecionando origem e estado local…"
+		if m.pullTarget != nil {
+			t := m.pullTarget
+			body = fmt.Sprintf("Origem: %s/%s → Local: %s\n\n↑%d à frente · ↓%d atrás (referências locais)\n\nBuscar atualizações e aplicar somente fast-forward?\n\nSem merge, rebase, stash ou descarte automático. Divergências e colisões com arquivos ignorados são recusadas. A busca pode atualizar referências remotas mesmo se a aplicação for bloqueada.", t.Remote, t.RemoteBranch, t.Branch, t.Ahead, t.Behind)
+		}
+		help = "Enter confirmar busca e atualização · Esc cancelar"
+		buttons = "[Confirmar] [Voltar]"
 	case "push":
 		title = "PUSH EXPLÍCITO"
 		if m.pushTarget == nil {

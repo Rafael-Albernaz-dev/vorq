@@ -13,6 +13,7 @@ import (
 	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/git"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/github"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/ui/tui"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/version"
 	"github.com/charmbracelet/lipgloss"
@@ -94,6 +95,7 @@ func NewRootCmd() *cobra.Command {
 		}
 	} else {
 		appCore = app.NewApp(git.NewRepository(gitRunner))
+		appCore.SetPullRequestProvider(github.NewClient())
 	}
 
 	rootCmd.AddCommand(newUpCmd(appCore, &icons))
@@ -105,8 +107,10 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newStatusCmd(appCore))
 	rootCmd.AddCommand(newCommitCmd(appCore))
 	rootCmd.AddCommand(newPushCmd(appCore))
+	rootCmd.AddCommand(newPullCmd(appCore))
 	rootCmd.AddCommand(newRmCmd(appCore))
 	rootCmd.AddCommand(newPruneCmd(appCore))
+	rootCmd.AddCommand(newBranchCmd(appCore), newTreeCmd(appCore), newPRCmd(appCore))
 
 	return rootCmd
 }

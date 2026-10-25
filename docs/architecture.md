@@ -87,3 +87,21 @@ Native stdout is capped at 16 MiB and stderr at 64 KiB; truncated stdout is neve
 The update loop owns separate navigation, commit, dialog, appearance, workspace and operation states. Commands, editing, modal input, messages and workspace context live in focused modules. Asynchronous commands capture immutable inputs and send results back with freshness tokens.
 
 Only the active worktree retains source and rendered preview buffers. Inactive contexts preserve draft, selection and viewport positions, then reload data through the application when restored. Syntax output streams token fragments using cached terminal styles rather than formatting each source token through reflection. Rendered mode caches remain scoped to the active source/theme.
+
+
+## Integrated Git workflow
+
+`app.WorkflowService` is shared by CLI and Studio for repository identity, branch creation, history and PR operations. `app.WorkflowRepository` is an additive typed capability of `git.Repository`; existing repository consumers do not need raw execution access. `app.PullRequestProvider` is injected at the CLI composition root as `github.Client`. Its native `gh` commands use structured arguments, an explicit github.com repository, disabled prompts, bounded output and a timeout. PR bodies travel through stdin with `--body-file -`, preserving newlines without shell interpolation. Explicit `--head` on creation prevents implicit branch publication; the application revalidates repository identity, current branch/HEAD and the remote branch OID first.
+
+Git history uses native topological graph output with NUL-delimited commit metadata, bounded pages and a ref/HEAD snapshot fingerprint. Changing refs between pages restarts the Studio traversal. Commit details preserve first-parent merge diffs and cap native patch previews at 256 KiB. Local refs never trigger fetch; shallow availability is explicit. PR head/merge OIDs are attached only after a requested GitHub query; a selected SHA can also be searched for PR membership. Truncated PR lists expose their configured limit instead of claiming complete coverage.
+
+Branch creation validates the literal ref and resolves the base to an OID. Switching to a different commit requires a clean status. Native switch uses `--no-overwrite-ignore`, `--no-recurse-submodules` and no force/stash, retaining Git's transactional branch creation and collision checks. No-first-commit repositories receive an actionable error; empty history remains readable.
+
+The Studio adds workflow state and separate list/detail freshness tokens with cancellation. Repository header, commands, screen navigation and editable/reviewable forms live in separate files. Text entry takes precedence over global shortcuts; the history shortcut is uppercase `H` to preserve Vim-style `h` navigation. Reads are asynchronous; mutation submission is guarded against duplicate Enter. PR failures describe uncertain/partial outcomes rather than inviting blind retries.
+
+
+### Right-panel actions and explicit updates
+
+The right pane owns Commit/Git/PRs/Worktrees presentation state. Tab selection performs no IO and retains the commit draft; action rows route to existing use cases and modal confirmations. The one-row tab bar preserves editor hit coordinates. Compact navigation exposes the pane as Ações. Arrow hit areas are measured inside the context's synchronization segment, excluding arbitrary branch/path text.
+
+`app.PullService` serves CLI and TUI. The preview reads only local metadata and fingerprints fetch URLs separately from push URLs. Confirmation requires the same workspace/branch/HEAD/source and a clean status. A bounded explicit fetch maps only the selected upstream and a random private temporary ref, disabling tags, recursive submodule fetches and automatic maintenance. The pinned OID avoids relying on mutable FETCH_HEAD. The core revalidates state after fetch, then native merge applies only `--ff-only --no-autostash --no-overwrite-ignore`, with submodule recursion disabled. The temporary ref is deleted by expected OID even on cancellation; remote-tracking updates remain visible on rejected integration. This provides pull --ff-only behavior with a second safety check and ignored-file protection; it never creates a merge commit or invokes rebase.

@@ -52,8 +52,22 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress {
 		return m, nil
 	}
+	if m.modal == "workflow" {
+		return m, m.workflowFormMouse(msg)
+	}
 	if m.modal != "" {
 		return m, m.modalMouse(msg)
+	}
+	if m.screen != "" {
+		return m, m.workflowMouse(msg)
+	}
+	if msg.Button == tea.MouseButtonLeft {
+		if hit, cmd := m.contextArrowClick(msg.X, msg.Y); hit {
+			return m, cmd
+		}
+	}
+	if msg.Y == 0 && msg.Button == tea.MouseButtonLeft {
+		return m, m.openRepository()
 	}
 	wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown || msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight
 	if msg.Button != tea.MouseButtonLeft && !wheel {
@@ -97,6 +111,9 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "commit":
+			if m.activeRightTab() != "commit" {
+				return m, nil
+			}
 			_, start, rows, inner := m.mouseDescriptionRect(width)
 			if y >= start && y < start+rows {
 				count := len(strings.Split(editorWrap(safeText(m.commitDescription), inner), "\n"))
@@ -153,6 +170,18 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "commit":
+		if y == 0 {
+			m.selectRightTab(mouseTabAt(rightTabs, width, x))
+			return m, nil
+		}
+		if m.activeRightTab() != "commit" {
+			rows := m.actionRows(width)
+			if y >= 0 && y < len(rows) && rows[y].action >= 0 {
+				m.rightActionIndex = rows[y].action
+				return m, m.runPanelAction(rows[y].action)
+			}
+			return m, nil
+		}
 		if m.mutating {
 			return m, nil
 		}
@@ -362,6 +391,10 @@ func (m *Model) mouseFooter(x int) tea.Cmd {
 		label string
 		key   tea.KeyMsg
 	}{
+		{"b Branch", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}}},
+		{"H Histórico", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'H'}}},
+		{"P PRs", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}}},
+		{"o GitHub", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}},
 		{"a Alterações", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}},
 		{"e Repositório", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}},
 		{"1 Trabalho", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}}},

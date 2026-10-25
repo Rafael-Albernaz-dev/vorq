@@ -90,6 +90,10 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 				return m.switchWorkspace(w.Path)
 			}
 		}
+	case "pull":
+		if s == "enter" {
+			return m.pull()
+		}
 	case "push":
 		if s == "enter" {
 			return m.push()

@@ -117,7 +117,8 @@ func (a *App) GetWorkspaceTree(ctx context.Context, currentDir string) (*domain.
 		}
 	}
 	aggregate(root)
-	return &domain.WorkspaceTree{Workspace: domain.Workspace{Path: proj.RootPath, Branch: branch, IsDetached: detached, Status: changes}, Root: root, Changes: changes}, nil
+	link, _ := a.GetRepositoryLink(ctx, proj.RootPath)
+	return &domain.WorkspaceTree{Repository: link, Workspace: domain.Workspace{Path: proj.RootPath, Branch: branch, IsDetached: detached, Status: changes}, Root: root, Changes: changes}, nil
 }
 
 func validateViewerPath(path string) error {

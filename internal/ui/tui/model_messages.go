@@ -60,3 +60,9 @@ type workspaceContext struct {
 	selected, treeOffset                                      int
 	viewer                                                    viewerState
 }
+
+type pullTargetMsg struct {
+	id     uint64
+	target *domain.PullTarget
+	err    error
+}

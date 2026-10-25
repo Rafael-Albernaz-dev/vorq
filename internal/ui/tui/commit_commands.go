@@ -61,6 +61,7 @@ func (m *Model) propose(commitType string) tea.Cmd {
 }
 
 func (m *Model) review() tea.Cmd {
+	m.rightTab = "commit"
 	if !m.canAct() {
 		return nil
 	}

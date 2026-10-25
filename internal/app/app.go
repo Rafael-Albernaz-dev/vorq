@@ -20,7 +20,8 @@ type SpawnResult struct {
 
 // App implements the Service interface coordinating adapters and business logic.
 type App struct {
-	gitRunner Repository
+	gitRunner    Repository
+	pullRequests PullRequestProvider
 }
 
 // NewApp initializes the application core with required adapters.

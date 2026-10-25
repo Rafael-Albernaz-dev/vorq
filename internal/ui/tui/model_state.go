@@ -18,6 +18,8 @@ type operationsState struct {
 	lastRefresh                          time.Time
 }
 type navigationState struct {
+	rightTab                                                  string
+	rightActionIndex                                          int
 	viewerGroup, activeTab, viewerTab, focusPane, lastDiffTab string
 	studio                                                    *domain.WorkspaceTree
 	snapshotSummary                                           domain.ChangeSummary
@@ -43,6 +45,7 @@ type dialogState struct {
 	modalScroll                              int
 	discardPlan                              *domain.DiscardPlan
 	pushTarget                               *domain.PushTarget
+	pullTarget                               *domain.PullTarget
 	worktrees                                []*domain.Workspace
 	worktreeIndex                            int
 }
