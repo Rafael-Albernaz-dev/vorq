@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -54,7 +56,25 @@ func NewNativeRunner() (*NativeRunner, error) {
 
 // Exec executes a git command in the specified directory with structured arguments.
 func (r *NativeRunner) Exec(ctx context.Context, dir string, args ...string) (string, error) {
+	return r.ExecInput(ctx, dir, nil, nil, args...)
+}
+
+// ExecInput scopes stdin/environment to this native invocation. It never changes
+// process-global environment, including when using a private Git index.
+func (r *NativeRunner) ExecInput(ctx context.Context, dir string, input io.Reader, overrides map[string]string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, r.gitBinPath, args...)
+	cmd.Stdin = input
+	if overrides != nil {
+		for _, value := range os.Environ() {
+			key, _, _ := strings.Cut(value, "=")
+			if _, ok := overrides[key]; !ok {
+				cmd.Env = append(cmd.Env, value)
+			}
+		}
+		for key, value := range overrides {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
+	}
 	cmd.WaitDelay = 2 * time.Second
 	if dir != "" {
 		cmd.Dir = dir

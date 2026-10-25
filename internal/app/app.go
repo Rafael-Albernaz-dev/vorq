@@ -22,6 +22,7 @@ type SpawnResult struct {
 type App struct {
 	gitRunner    Repository
 	pullRequests PullRequestProvider
+	ai           AIProvider
 }
 
 // NewApp initializes the application core with required adapters.
