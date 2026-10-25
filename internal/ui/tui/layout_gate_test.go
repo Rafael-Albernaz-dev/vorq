@@ -10,7 +10,7 @@ import (
 func TestLayoutMinimumDialogsKeepActionsAndEveryLineReachable(t *testing.T) {
 	m, _, _, _, _ := setupStudio(t)
 	m.Update(tea.WindowSizeMsg{Width: 50, Height: 14})
-	for _, modal := range []string{"help", "error", "appearance", "suggest", "commit", "push", "worktrees", "unstage", "result"} {
+	for _, modal := range []string{"help", "error", "appearance", "suggest", "ai-models", "ai-send", "ai-review", "ai-error", "ai-options", "commit", "push", "worktrees", "unstage", "result"} {
 		m.modal = modal
 		m.commitPhase = "review"
 		m.reviewMessage = "feat: real review"

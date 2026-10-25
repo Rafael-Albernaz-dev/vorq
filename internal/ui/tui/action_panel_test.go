@@ -75,7 +75,7 @@ func TestActionPanelMouseOpensBranchHistoryWorktreesAndPRs(t *testing.T) {
 	stub := &workflowStub{StudioService: m.core}
 	m.core = stub
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 42})
-	clickPanelTab(t, m, 1)
+	clickPanelTab(t, m, 2)
 	drive(t, m, clickPanelAction(t, m, "Nova branch"))
 	if m.modal != "workflow" || m.formKind != "branch" {
 		t.Fatal("branch form not opened")
@@ -86,13 +86,13 @@ func TestActionPanelMouseOpensBranchHistoryWorktreesAndPRs(t *testing.T) {
 		t.Fatal("history not opened")
 	}
 	press(m, "esc")
-	clickPanelTab(t, m, 3)
+	clickPanelTab(t, m, 4)
 	drive(t, m, clickPanelAction(t, m, "Abrir worktrees"))
 	if m.modal != "worktrees" {
 		t.Fatal("worktree chooser not opened")
 	}
 	press(m, "esc")
-	clickPanelTab(t, m, 2)
+	clickPanelTab(t, m, 3)
 	if stub.lists != 0 {
 		t.Fatal("PR tab queried GitHub")
 	}
@@ -101,7 +101,7 @@ func TestActionPanelMouseOpensBranchHistoryWorktreesAndPRs(t *testing.T) {
 		t.Fatal("PR list not opened")
 	}
 	press(m, "esc")
-	clickPanelTab(t, m, 2)
+	clickPanelTab(t, m, 3)
 	drive(t, m, clickPanelAction(t, m, "Criar PR"))
 	if m.modal != "workflow" || m.formKind != "pr" || stub.saves != 0 {
 		t.Fatal("PR form must not publish")
@@ -163,7 +163,7 @@ func TestPullButtonRequiresConfirmationAndBlocksDuplicate(t *testing.T) {
 	stub := &panelPullStub{StudioService: m.core}
 	m.core = stub
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 42})
-	clickPanelTab(t, m, 1)
+	clickPanelTab(t, m, 2)
 	drive(t, m, clickPanelAction(t, m, "Atualizar branch ↓"))
 	if stub.previews != 1 || stub.pulls != 0 {
 		t.Fatal("preview performed pull")
@@ -183,7 +183,7 @@ func TestPullButtonRequiresConfirmationAndBlocksDuplicate(t *testing.T) {
 func TestActionTabsKeyboardAndTextPriority(t *testing.T) {
 	m, _, _, _, _ := setupStudio(t)
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 42})
-	clickPanelTab(t, m, 1)
+	clickPanelTab(t, m, 2)
 	press(m, "right")
 	if m.activeRightTab() != "prs" {
 		t.Fatal("keyboard tab navigation missing")

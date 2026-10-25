@@ -109,6 +109,7 @@ func (m *Model) renderView() string {
 			shortcuts = " Tab Campos  ^G Sugerir  ^S Revisar  Esc Voltar"
 		}
 	}
+	shortcuts = " [IA] Sugerir " + strings.TrimSpace(shortcuts)
 	bar := lipgloss.NewStyle().Foreground(ColorBarText).Background(ColorBar).Render(fit(shortcuts, m.width))
 	base := strings.Join(append(append(top, body), notice, bar), "\n")
 	if m.modal != "" {
@@ -122,11 +123,15 @@ func paneRule(width int) string {
 }
 func (m *Model) treePane(width int) string {
 	tabs := renderTabs([]string{"Alterações", "Repositório"}, boolIndex(m.activeTab == "repositorio"), width)
-	meta := fmt.Sprintf(" %d alterados · %d caminhos", m.changeSummary().Total, m.inventoryCount)
+	meta := fmt.Sprintf(" %d alterados · %d arquivos carregados", m.changeSummary().Total, m.inventoryCount)
 	if m.studio == nil {
 		meta = " … alterados · … arquivos"
 	}
-	return strings.Join([]string{tabs, surface(dimStyle.Render(meta), width, ColorPanel), m.treeView(width), surface(dimStyle.Render(" [x] stage · [-] em ambos · s alternar"), width, ColorPanel)}, "\n")
+	legend := " [x] stage · [-] em ambos · s alternar"
+	if m.activeTab == "repositorio" {
+		legend = " ? novo · ! ignorado · botão direito: copiar path"
+	}
+	return strings.Join([]string{tabs, surface(dimStyle.Render(meta), width, ColorPanel), m.treeView(width), surface(dimStyle.Render(legend), width, ColorPanel)}, "\n")
 }
 func boolIndex(b bool) int {
 	if b {
@@ -269,10 +274,10 @@ func (m *Model) commitEditorPane(width int) string {
 		for _, line := range fieldLines(m.commitDescription, m.descriptionCursor, width-2, max(1, h-8), m.focusPane == "commit" && m.commitField == "description" && m.commitEditing, m.descriptionOffset) {
 			lines = append(lines, surface(" "+line, width, ColorRaised))
 		}
-		lines = append(lines, surface(greenStyle.Render(count), width, ColorPanel), surface(cyanStyle.Render(" Tipo: "+m.commitType+" · Ctrl+G escolher"), width, ColorPanel), surface(button.Render(" [c] Revisar commit local"), width, ColorPanel), surface(dimStyle.Render(" Local · Tab campos · Esc voltar"), width, ColorPanel))
+		lines = append(lines, surface(greenStyle.Render(count), width, ColorPanel), surface(cyanStyle.Bold(true).Render(" [IA] Sugerir com IA · modelo"), width, ColorPanel), surface(button.Render(" [c] Revisar commit local"), width, ColorPanel), surface(dimStyle.Render(" Local · Tab campos · Esc voltar"), width, ColorPanel))
 		return fillPanel(lines, width, h, ColorPanel)
 	}
-	lines := []string{header, surface(paneRule(width), width, ColorPanel), surface(cyanStyle.Render(" Tipo: "+m.commitType+" · escolher/revisar"), width, ColorPanel), surface("", width, ColorPanel), surface(dimStyle.Render(" Resumo"), width, ColorPanel)}
+	lines := []string{header, surface(paneRule(width), width, ColorPanel), surface(cyanStyle.Bold(true).Render(" [IA] Sugerir com IA · modelo"), width, ColorPanel), surface("", width, ColorPanel), surface(dimStyle.Render(" Resumo"), width, ColorPanel)}
 	lines = append(lines, m.fieldBox(m.commitSummary, m.summaryCursor, width, 1, "summary")...)
 	lines = append(lines, surface(dimStyle.Render(" Descrição · opcional"), width, ColorPanel))
 	lines = append(lines, m.fieldBox(m.commitDescription, m.descriptionCursor, width, 4, "description")...)
@@ -281,7 +286,14 @@ func (m *Model) commitEditorPane(width int) string {
 	if m.suggested {
 		mark = "[x]"
 	}
-	lines = append(lines, surface(dimStyle.Render(" "+mark+" Sugestão por regras locais"), width, ColorPanel), surface(dimStyle.Render(" [ ] Revisar diff preparado"), width, ColorPanel), surface("", width, ColorPanel))
+	source := "Escolha IA ou regras locais"
+	if m.suggested {
+		source = m.suggestionSource
+		if source == "" {
+			source = "Sugestão aplicada"
+		}
+	}
+	lines = append(lines, surface(dimStyle.Render(" "+mark+" "+safeText(source)), width, ColorPanel), surface(dimStyle.Render(" [ ] Revisar diff preparado"), width, ColorPanel), surface("", width, ColorPanel))
 	lines = append(lines, surface(button.Render("┌"+strings.Repeat("─", width-2)+"┐"), width, ColorPanel), surface(button.Render("│"+fit(" [c] Revisar commit local", width-2)+"│"), width, ColorPanel), surface(button.Render("└"+strings.Repeat("─", width-2)+"┘"), width, ColorPanel))
 	lines = append(lines, surface("", width, ColorPanel), surface(dimStyle.Render(" Commit local; push é separado."), width, ColorPanel), surface(dimStyle.Render(" Cancelar preserva stage e rascunho."), width, ColorPanel))
 	return fillPanel(lines, width, h, ColorPanel)
@@ -359,9 +371,85 @@ func (m *Model) modalView() string {
 		buttons = "[Voltar]"
 	case "suggest":
 		title = "SUGERIR CONVENTIONAL COMMIT"
-		body = "Escolha o tipo para os arquivos no stage:\n\n[1] feat   [2] fix    [3] chore    [4] refactor\n[5] docs   [6] test   [7] style    [8] perf\n\nO resumo será preenchido por regras locais.\nA descrição já escrita será preservada."
-		help = "1–8 escolher · Esc cancelar"
+		body = "Sugerir com IA (inglês):\n[c] Codex   [g] Gemini (Antigravity)\n\nRegras locais — escolha o tipo:\n[1] feat   [2] fix    [3] chore    [4] refactor\n[5] docs   [6] test   [7] style    [8] perf\n\nIA: prévia antes de substituir o rascunho.\nRegras: preservam a descrição existente."
+		help = "c/g IA · 1–8 regras locais · Esc cancelar"
+		if m.aiTask != "" && m.aiTask != "suggest" {
+			body = "Escolha o provedor:\n[c] Codex   [g] Gemini (Antigravity)\n\nDepois escolha o modelo. Inglês por padrão."
+			help = "c/g provedor · Esc voltar"
+		}
 		buttons = "[Voltar]"
+	case "ai-send":
+		title = "SUGERIR COM IA · " + m.aiProvider
+		body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar somente o diff staged ao provedor escolhido.\nInglês · até 48 KiB · timeout de 90 segundos.\n\nO conteúdo sai desta máquina e usa a cota da assinatura.\nA resposta será revisada antes de substituir resumo e descrição.\nNenhum commit ou push será executado."
+		if m.aiTask == "review" || m.aiTask == "plan" {
+			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nAnalisar versões de trabalho das mudanças rastreadas e novos arquivos elegíveis, incluindo fora do stage.\nIgnorados, binários, links e arquivos grandes serão listados como excluídos.\n\nAté 512 KiB por análise; sem truncamento silencioso.\nO conteúdo sai desta máquina e usa a cota da assinatura.\nNenhum stage ou commit até aprovar o plano."
+		}
+		if m.changeSummary().Staged == 0 && m.aiTask != "review" && m.aiTask != "plan" {
+			body = "Nenhum arquivo no stage.\nVolte e use s em um arquivo ou A para preparar as mudanças.\n\nModelo escolhido: " + safeText(m.aiModelLabel()) + "\nNada será enviado sem arquivos no stage."
+		}
+		if m.busy != "" {
+			body = "Analisando somente o staged…\nEsc cancela e preserva seu rascunho."
+			if m.aiTask == "review" || m.aiTask == "plan" {
+				body = "Analisando mudanças elegíveis…\nEsc cancela a análise; arquivos e stage preservados."
+			}
+		}
+		help = "Enter enviar · Esc cancelar"
+		buttons = "[Confirmar]  [Voltar]"
+	case "ai-models":
+		title = "ESCOLHER MODELO · " + m.aiProvider
+		body = m.aiModelsBody()
+		if m.busy != "" {
+			body = "Consultando modelos disponíveis…"
+		}
+		help = "↑/↓ ou clique escolher · Enter revisar envio · Esc voltar"
+		buttons = "[Revisar] [Voltar]"
+	case "ai-review":
+		title = "REVISAR SUGESTÃO · " + m.aiProvider
+		if m.aiProposal != nil {
+			body = safeText(m.aiProposal.Proposal.Message())
+		}
+		body += "\n\nUsar preenche o editor. Commit abre a revisão local antes de confirmar.\nAmbos substituem resumo e descrição do rascunho."
+		help = "Enter usar · v revisar commit · o opções · Esc voltar"
+		buttons = "[Usar] [Commit] [Mais] [Voltar]"
+	case "ai-error":
+		title = "SUGESTÃO NÃO GERADA · " + m.aiProvider
+		body = safeText(m.aiError) + "\n\nSeu rascunho foi preservado.\nAbra Opções para repetir, escolher outro provedor ou usar regras locais."
+		help = "o opções · r repetir · c/g provedor · l regras · Esc voltar"
+		buttons = "[Opções] [Voltar]"
+	case "ai-options":
+		title = "OPÇÕES DA SUGESTÃO"
+		body = "[r] Tentar novamente\n[c] Codex\n[g] Gemini (Antigravity)\n[l] Regras locais\n\nO rascunho atual permanece preservado."
+		help = "Clique ou r/c/g/l escolher · Esc fechar"
+		buttons = "[Voltar]"
+	case "diff-review":
+		title = "REVISÃO DO DIFF · IA"
+		body = m.diffReviewBody()
+		help = "o organizar commits · PgUp/PgDown rolar · Esc voltar"
+		buttons = "[Organizar] [Voltar]"
+	case "plan":
+		title = "PLANO DE COMMITS · REVISAR"
+		body = m.planBody()
+		help = "↑/↓ grupo · e editar · d diff · Enter executar · Esc voltar"
+		buttons = "[Executar] [Editar] [Diff] [Voltar]"
+		if inner < 43 {
+			buttons = "[OK] [Editar] [Diff] [Voltar]"
+		}
+	case "plan-diff":
+		title = "DIFF DO GRUPO · CONTEÚDO REVISADO"
+		body = m.planDiffBody()
+		help = "PgUp/PgDown rolar · Esc voltar"
+		buttons = "[Voltar]"
+	case "plan-edit":
+		title = "EDITAR PLANO · " + m.planEditKind
+		instructions := map[string]string{"message": "Mensagem: primeira linha título, demais descrição. Ctrl+U limpa.", "move": "Informe ID e grupo destino. Exemplo: F0001 2", "exclude": "Informe ID a excluir. Arquivo/stage serão preservados.", "order": "Informe o número da posição destino do grupo."}
+		body = instructions[m.planEditKind] + "\n\n" + safeText(m.planEditValue) + "▏"
+		help = "Ctrl+S salvar · Esc cancelar"
+		buttons = "[Salvar] [Cancelar]"
+	case "plan-execute":
+		title = "APROVAR E EXECUTAR PLANO"
+		body = m.planBody() + "\n\nConfirmar cria a sequência restante de commits locais.\nSe uma etapa falhar, anteriores podem existir; o progresso será salvo.\nSem push. Nenhum stash, descarte ou reescrita do histórico."
+		help = "Enter confirmar sequência · Esc cancelar"
+		buttons = "[Confirmar] [Voltar]"
 	case "commit":
 		title = "REVISAR COMMIT LOCAL"
 		if m.commitPhase == "loading" {

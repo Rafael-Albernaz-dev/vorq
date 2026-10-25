@@ -41,6 +41,23 @@ func tick() tea.Cmd {
 }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case automationMsg:
+		return m, m.receiveAutomation(msg)
+	case inventoryMsg:
+		return m, m.receiveInventory(msg)
+	case copiedPathMsg:
+		if msg.err != nil {
+			m.notice = "Não foi possível copiar: " + msg.err.Error()
+		} else {
+			m.notice = "Caminho copiado: " + safeText(msg.path)
+		}
+		return m, nil
+	case aiModelsMsg:
+		return m, m.receiveAIModels(msg)
+	case aiProposalMsg:
+		return m, m.receiveAI(msg)
+	case aiApplyMsg:
+		return m, m.receiveAIApply(msg)
 	case branchesMsg:
 		if msg.id != m.dialogID {
 			return m, nil
@@ -160,6 +177,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.suggested = true
+		m.suggestionSource = "Regras locais"
 		m.commitSummary = msg.proposal.Subject
 		if m.commitDescription == "" {
 			m.commitDescription = msg.proposal.Body

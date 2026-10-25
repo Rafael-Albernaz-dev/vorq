@@ -6,6 +6,19 @@ import (
 
 func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 	s := key.String()
+	if m.modal == "plan-edit" {
+		return m.automationKey(key)
+	}
+	if m.modal == "plan-diff" && s == "esc" {
+		m.modal = "plan"
+		return nil
+	}
+	if m.modal == "plan" && (s == "up" || s == "down" || s == "j" || s == "k") {
+		return m.automationKey(key)
+	}
+	if m.modal == "ai-models" && s != "esc" && s != "q" {
+		return m.aiModelKey(s)
+	}
 	if m.modal == "branches" && s != "esc" && s != "q" {
 		return m.branchSelectorKey(key)
 	}
@@ -50,6 +63,26 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch m.modal {
+	case "plan", "plan-execute", "diff-review":
+		return m.automationKey(key)
+	case "ai-send":
+		if s == "enter" {
+			return m.generateAI()
+		}
+	case "ai-review":
+		if s == "enter" {
+			m.aiThenReview = false
+			return m.applyAI()
+		}
+		if s == "v" {
+			m.aiThenReview = true
+			return m.applyAI()
+		}
+		return m.aiRecoveryKey(s)
+	case "ai-error":
+		return m.aiRecoveryKey(s)
+	case "ai-options":
+		return m.aiRecoveryKey(s)
 	case "appearance":
 		if s == "i" {
 			m.cycleIcons()
@@ -107,6 +140,12 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			return m.push()
 		}
 	case "suggest":
+		if s == "c" || s == "g" {
+			return m.chooseAI(s)
+		}
+		if m.aiTask != "" && m.aiTask != "suggest" {
+			return nil
+		}
 		for i, value := range []string{"1", "2", "3", "4", "5", "6", "7", "8"} {
 			if s == value {
 				return m.propose([]string{"feat", "fix", "chore", "refactor", "docs", "test", "style", "perf"}[i])

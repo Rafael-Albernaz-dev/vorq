@@ -61,6 +61,17 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.screen != "" {
 		return m, m.workflowMouse(msg)
 	}
+	if msg.Button == tea.MouseButtonRight {
+		pane, _, y, _ := m.mousePane(msg.X, msg.Y)
+		index := m.treeOffset + y - 4
+		if pane == "tree" && y >= 4 && y < 4+m.bodyHeight() && index >= 0 && index < len(m.rows) {
+			node := m.rows[index].node
+			if node != nil && !node.IsDir && !node.More {
+				return m, m.copyFilePath(node.Path)
+			}
+		}
+		return m, nil
+	}
 	if msg.Button == tea.MouseButtonLeft {
 		if hit, cmd := m.contextArrowClick(msg.X, msg.Y); hit {
 			return m, cmd
@@ -146,9 +157,10 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.selected = index
 		node := m.selectedNode()
 		if node.IsDir {
-			m.expanded[m.expandedKey()] = !m.expanded[m.expandedKey()]
-			m.rebuildTree()
-			return m, m.loadSelected()
+			return m, m.expandInventory(node)
+		}
+		if node.More {
+			return m, m.expandInventory(node)
 		}
 		if x >= 3 && x <= 5 {
 			// The normal key route applies busy/loading/stale guards as well as
@@ -334,7 +346,7 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 	line := box[y]
 	// Only the renderer's dedicated three-row outlined footer owns actions.
 	// Message text and paths remain data even when they contain button labels.
-	for label, key := range map[string]string{"[Descartar]": "enter", "[Preservar]": "u", "[Confirmar]": "enter", "[Abrir]": "enter", "[Editar]": "e", "[Voltar]": "esc", "[Fechar]": "esc", "[Cancelar]": "esc"} {
+	for label, key := range map[string]string{"[Executar]": "enter", "[OK]": "enter", "[Diff]": "d", "[Salvar]": "ctrl+s", "[Organizar]": "o", "[Descartar]": "enter", "[Preservar]": "u", "[Confirmar]": "enter", "[Usar]": "enter", "[Commit]": "v", "[Mais]": "o", "[Revisar]": "enter", "[Abrir]": "enter", "[Editar]": "e", "[Opções]": "o", "[Voltar]": "esc", "[Fechar]": "esc", "[Cancelar]": "esc"} {
 		if mouseOutlinedButtonHit(box, label, x, y) {
 			if key == "enter" {
 				return m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -347,6 +359,23 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 	}
 	if m.busy != "" {
 		return nil
+	}
+	if m.modal == "ai-models" {
+		for i := range m.aiModels {
+			key := fmt.Sprint(i + 1)
+			if mouseLabelHit(line, "["+key+"]", x) {
+				m.aiModelIndex = i
+				m.aiModel = m.aiModels[i].ID
+				return nil
+			}
+		}
+	}
+	if m.modal == "suggest" || m.modal == "ai-options" {
+		for _, key := range []string{"c", "g", "r", "l"} {
+			if mouseLabelHit(line, "["+key+"]", x) {
+				return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			}
+		}
 	}
 	if m.modal == "appearance" && mouseLabelHit(line, "[i]", x) {
 		return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
@@ -394,6 +423,7 @@ func (m *Model) mouseFooter(x int) tea.Cmd {
 		label string
 		key   tea.KeyMsg
 	}{
+		{"[IA] Sugerir", tea.KeyMsg{Type: tea.KeyCtrlG}},
 		{"b Branch", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}}},
 		{"H Histórico", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'H'}}},
 		{"P PRs", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}}},

@@ -165,6 +165,25 @@ vorq rm feat/my-new-task
 
 ---
 
+## AI commit suggestions
+
+Open the **IA** tab and choose **Provedor e modelo**, **Sugerir mensagem**, **Revisar diff**, **Organizar commits**, or **Revisar plano**. For message suggestions, you can also click **Sugerir com IA** in the Commit panel, or **[IA] Sugerir** in the footer of any workspace view (keyboard: **Ctrl+G**). Choose **Codex** or **Gemini (Antigravity)**, select a model with the mouse or arrow keys, review the selected model, and confirm sending the staged diff. Review the suggested English Conventional Commit title and body. Choose **Usar** to fill the editor, or **Commit** to open the local commit review with that suggestion; only the subsequent confirmation creates the commit. Applying the preview replaces both draft fields; cancelling preserves your draft. Commit and push remain separate actions. Local rules remain available offline and preserve an existing description.
+
+AI requires an official CLI installed and signed in with your own subscription: `codex login` using ChatGPT, or `agy` using your Google account. Gemini uses **Antigravity CLI (`agy`)**, not the legacy `gemini` command. Provider quotas and availability apply. The TUI model picker reads Codex’s official local model cache and discovers Gemini models through `agy models`. Codex also offers its CLI default. The CLI accepts `--model <id>`; without it, Gemini uses `gemini-3.8-flash-low` and Codex uses its CLI default. Model availability depends on the account and client catalog. Claude and Ollama are not integrated in this slice.
+
+Only the staged diff is supplied as repository content. AI sends that code to the selected provider, so review the stage before sending. Diffs above 48 KiB are rejected before transmission rather than silently truncated. Clients run in a temporary empty workspace; the adapter disables Codex shell/browser/apps/hooks and isolates Antigravity settings with strict deny rules, no credit fallback, and a text-only agent definition. Provider clients may add their own system context. The Antigravity client still advertises built-in tools in its event metadata; the empty agent definition alone is not a sandbox. Unstaged/untracked files and project instructions are not supplied. vorq does not store API keys or reuse editor API endpoints.
+
+Generation has a 90-second timeout and is cancellable. The stage is checked again after generation and before a TUI preview is applied. Failure offers retry, another provider, or local rules through **Opções**; providers and billing modes never switch automatically. Existing draft text is preserved until you explicitly apply a reviewed suggestion. Output is validated, bounded, and treated as text.
+
+```bash
+vorq suggest --provider codex
+vorq suggest --provider codex --model gpt-6-luna
+vorq suggest --provider gemini  # Gemini through Antigravity CLI
+vorq suggest --provider rules --type fix
+```
+
+The explicit CLI command sends the staged diff immediately and prints a suggestion; it never stages files or creates a commit. Errors explain the same recovery choices as the TUI. Ctrl+C cancels the client process group.
+
 ## Branches, history and pull requests
 
 The right panel has clickable **Commit / Git / PRs / Worktrees** tabs. Commit retains the message editor; Git offers branch creation, switching existing local branches, history, push review and branch updates; PRs offers list/create actions; Worktrees opens the existing workspace chooser. Switching tabs preserves the commit draft and performs no GitHub/network operation. Buttons open the same flows as keyboard shortcuts. In compact mode, click **Ações** in the top pane navigation first. With the right pane focused and outside text editing, Left/Right switches tabs and Up/Down/Tab selects an action; Enter opens it.
@@ -217,3 +236,30 @@ PR writes display the repository, branches and fields before asking for `y`; EOF
 ## 📄 License
 
 MIT © [Rafael Albernaz](https://github.com/Rafael-Albernaz-dev)
+
+
+## AI review and approved commit plans
+
+In the **IA** tab, **Revisar diff** reviews eligible working versions, including unstaged changes and new files. **Organizar commits** proposes ordered whole-file groups and English Conventional Commit messages. Both show a disclosure before sending repository content to the chosen subscription CLI. Ignored files, binaries, symlinks/submodules and files above 256 KiB are excluded. Analysis accepts up to 512 KiB of JSON input and rejects larger requests without silently truncating them.
+
+Review every group and its **Diff** before execution. Arrow keys select a group; `e` edits its message, `m` moves a file ID to another group, `x` excludes a file, and `r` changes group order. Save edits with Ctrl+S. **Executar** opens a separate confirmation before creating the remaining local commits. A partially staged file contributes its complete reviewed working version, rather than only its staged portion. Hunk splitting is not supported.
+
+The executor pins content, rechecks HEAD/index/files, uses a private Git index per commit, and preserves unrelated stage entries. Native hooks and signing still run. A failed sequence reports existing commit hashes and stops; **Revisar plano** reloads saved progress for resuming. Changes after review require a new plan. An `INSPECT:` warning requires inspecting history and index before proceeding. No automatic push, stash, reset or history rewrite is performed. Finish any merge/rebase/cherry-pick before using this workflow, and avoid concurrent commits in the same checkout.
+
+Plans, including their pinned file contents, are stored privately under `~/.local/state/vorq/plans/` with owner-only file permissions. Provider/model selection belongs to the current TUI session. CLI equivalents:
+
+```bash
+vorq ai review --provider codex --model gpt-6-luna
+vorq ai plan --provider gemini --model gemini-3.8-flash-low
+vorq ai show --diff
+vorq ai edit --kind message --group 1 --subject 'feat: describe reviewed changes'
+vorq ai execute  # prints pinned diffs and asks for approval
+```
+
+Choose a model actually available in your CLI catalog. `ai execute --yes` explicitly approves the saved plan without prompting. `--json` output includes snapshot content and should be handled as private data. Plans suggest grouping and dependencies; they do not prove that each intermediate commit passes your tests.
+
+## Repository inventory and file references
+
+The **Repositório** tree includes tracked, untracked and ignored project files. Untracked names use cyan and `?`; ignored entries use gray and `!`, with a legend. Ignored directories expand on demand in pages of 200 entries. Counts describe loaded files; `…`/`+` and **Carregar mais…** indicate remaining content. Internal `.git` metadata is excluded. Viewing ignored files does not add them to **Alterações**, stage or AI input.
+
+Right-click a file in the tree to copy its absolute path from the current worktree. The clicked row is used even when another file is selected, and symlink paths are copied without resolving their target. Clipboard support uses `wl-copy` on Wayland or `xclip`/`xsel` on X11; unavailable backends report an error. CLI: `vorq path internal/app/automation.go`, optionally with `--copy`.

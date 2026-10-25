@@ -30,6 +30,18 @@ type navigationState struct {
 	viewer                                                    viewerState
 }
 type commitState struct {
+	aiTask                                                     string
+	commitPlan                                                 *domain.CommitPlan
+	diffReview                                                 *domain.DiffReview
+	planGroup                                                  int
+	planEditKind, planEditValue                                string
+	aiProvider, aiError                                        string
+	aiModel, suggestionSource                                  string
+	aiModels                                                   []domain.AIModel
+	aiModelIndex                                               int
+	aiThenReview                                               bool
+	aiProposal                                                 *domain.AIProposal
+	aiRevision                                                 uint64
 	commitSummary, commitDescription, commitField, commitPhase string
 	commitEditing                                              bool
 	summaryCursor, descriptionCursor, descriptionOffset        int
