@@ -65,6 +65,8 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 	switch m.modal {
 	case "plan", "plan-execute", "diff-review":
 		return m.automationKey(key)
+	case "stage-advice", "stage-confirm":
+		return m.stageAdviceKey(key)
 	case "ai-send":
 		if s == "enter" {
 			return m.generateAI()

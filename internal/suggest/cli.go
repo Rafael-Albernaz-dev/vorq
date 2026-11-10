@@ -63,19 +63,33 @@ func (p *CLIProvider) Analyze(ctx context.Context, req domain.AnalysisRequest) (
 		prompt += "Perform a thorough, senior-level code review of the supplied changes. Examine: correctness bugs and edge cases; error handling; concurrency and resource leaks; security (injection, secrets, unsafe input, permissions); performance; API/behaviour compatibility; missing or weak tests; and maintainability. Report only issues grounded in the supplied diff, each with evidence quoted from it and a concrete suggested fix. Severity: error = likely bug/security issue, warning = risk or missing coverage, info = improvement. The summary must give an overall assessment, the main risks and what to verify before committing. Return {\"summary\":\"English summary\",\"findings\":[{\"file_id\":\"provided ID\",\"severity\":\"info|warning|error\",\"message\":\"English explanation\",\"evidence\":\"specific evidence quoted from the supplied diff\",\"suggestion\":\"concrete fix\"}]}. file_id must be the supplied \"id\" value (for example F0001), never a path. Up to 100 findings, most severe first; empty findings if there are no concrete issues.\n"
 	case "plan":
 		prompt += "Organize ALL supplied file IDs into ordered cohesive commits, respecting dependencies and keeping tests with their implementation. Do not split a file across groups. Return {\"commits\":[{\"subject\":\"English Conventional Commit subject, <=100 chars\",\"body\":\"English description\",\"reason\":\"why these changes belong together\",\"files\":[\"file ID\"]}]}. Each provided ID must occur exactly once. File references must be the \"id\" values exactly as supplied (for example F0001), never paths. No commands or patches.\n"
+	case "stage":
+		prompt += "Decide which changed files belong in the NEXT single cohesive commit. You receive the repository's own context documents (context_documents: README, CONTRIBUTING, docs, templates, commit conventions) and the changed files (files: working versions, staged or not). Follow the conventions in the context documents. Basic checks for every file: leftover debug code or prints, secrets or credentials, generated/build/lock files, unrelated changes mixed together, unfinished work (TODO/FIXME added), and tests or documentation the context documents require. Put the files of the next commit in stage (each with a reason) and EVERY other file in hold (each with a reason and the concrete risk). Every supplied file id must appear exactly once in stage or hold; references must be the id values (for example F0001), never paths. Then write an English Conventional Commit subject (<=100 chars) and body describing ONLY the staged files. Return {\"summary\":\"English assessment of the working changes\",\"stage\":[{\"file_id\":\"id\",\"reason\":\"why it belongs\"}],\"hold\":[{\"file_id\":\"id\",\"reason\":\"why not now\",\"risk\":\"risk if committed\"}],\"subject\":\"type(scope): subject\",\"body\":\"body\"}.\n"
 	default:
 		return nil, fmt.Errorf("unknown analysis task")
 	}
 	schema := reviewSchema
-	if req.Task == "plan" {
+	switch req.Task {
+	case "plan":
 		schema = planSchema
+	case "stage":
+		schema = stageSchema
 	}
 	// Constrain file references to the IDs actually supplied, so a model
 	// cannot answer with paths or invented IDs.
-	var files []struct {
+	type fileRef struct {
 		ID string `json:"id"`
 	}
-	if json.Unmarshal([]byte(req.Payload), &files) == nil && len(files) > 0 {
+	var files []fileRef
+	if json.Unmarshal([]byte(req.Payload), &files) != nil {
+		var wrapped struct {
+			Files []fileRef `json:"files"`
+		}
+		if json.Unmarshal([]byte(req.Payload), &wrapped) == nil {
+			files = wrapped.Files
+		}
+	}
+	if len(files) > 0 {
 		var ids []string
 		for _, f := range files {
 			ids = append(ids, f.ID)
@@ -95,6 +109,8 @@ const (
 	reviewSchema  = `{"type":"object","properties":{"summary":{"type":"string"},"findings":{"type":"array","items":{"type":"object","properties":{"file_id":` + idSchemaPlaceholder + `,"severity":{"type":"string","enum":["info","warning","error"]},"message":{"type":"string"},"evidence":{"type":"string"},"suggestion":{"type":"string"}},"required":["file_id","severity","message","evidence"],"additionalProperties":false}}},"required":["summary","findings"],"additionalProperties":false}`
 	planSchema    = `{"type":"object","properties":{"commits":{"type":"array","items":{"type":"object","properties":{"subject":{"type":"string"},"body":{"type":"string"},"reason":{"type":"string"},"files":{"type":"array","items":` + idSchemaPlaceholder + `}},"required":["subject","body","reason","files"],"additionalProperties":false}}},"required":["commits"],"additionalProperties":false}`
 )
+
+var stageSchema = `{"type":"object","properties":{"summary":{"type":"string"},"stage":{"type":"array","items":{"type":"object","properties":{"file_id":` + idSchemaPlaceholder + `,"reason":{"type":"string"}},"required":["file_id","reason"],"additionalProperties":false}},"hold":{"type":"array","items":{"type":"object","properties":{"file_id":` + idSchemaPlaceholder + `,"reason":{"type":"string"},"risk":{"type":"string"}},"required":["file_id","reason","risk"],"additionalProperties":false}},"subject":{"type":"string"},"body":{"type":"string"}},"required":["summary","stage","hold","subject","body"],"additionalProperties":false}`
 
 // idSchemaPlaceholder is replaced per request by the supplied file IDs.
 const idSchemaPlaceholder = `"__VORQ_FILE_ID__"`

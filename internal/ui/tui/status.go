@@ -282,7 +282,7 @@ func fillPanel(lines []string, width, height int, bg lipgloss.Color) string {
 
 func (m *Model) modalView() string {
 	width := min(90, m.width-6)
-	if m.modal == "diff-review" {
+	if m.modal == "diff-review" || m.modal == "stage-advice" || m.modal == "stage-confirm" {
 		width = min(140, m.width-4) // long technical text reads better wider
 	}
 	inner := width - 4
@@ -355,15 +355,18 @@ func (m *Model) modalView() string {
 	case "ai-send":
 		title = "SUGERIR COM IA · " + m.aiProvider
 		body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar somente o diff staged ao provedor escolhido.\n" + fmt.Sprintf("Inglês · até %d KiB · timeout de %d min.", app.MaxAIDiffBytes/1024, int(app.AISuggestTimeout.Minutes())) + "\n\nO conteúdo sai desta máquina e usa a cota da assinatura.\nA resposta será revisada antes de substituir resumo e descrição.\nNenhum commit ou push será executado."
-		if m.aiTask == "review" || m.aiTask == "plan" {
+		if isWorkingAnalysis(m.aiTask) {
 			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nAnalisar versões de trabalho das mudanças rastreadas e novos arquivos elegíveis, incluindo fora do stage.\nIgnorados, binários, links e arquivos grandes serão listados como excluídos.\n\n" + fmt.Sprintf("Até %d MiB por análise e 1 MiB por arquivo; sem truncamento silencioso.", app.AnalysisLimit/(1024*1024)) + "\nO conteúdo sai desta máquina e usa a cota da assinatura.\nNenhum stage ou commit até aprovar o plano."
 		}
-		if m.changeSummary().Staged == 0 && m.aiTask != "review" && m.aiTask != "plan" {
+		if m.aiTask == "stage" {
+			body += "\n\nTambém envia documentos de contexto versionados (README, CONTRIBUTING, docs/*.md, templates .github, convenções de commit); documentos ignorados/privados nunca são enviados. O stage só muda depois de [Aplicar] e confirmar."
+		}
+		if m.changeSummary().Staged == 0 && !isWorkingAnalysis(m.aiTask) {
 			body = "Nenhum arquivo no stage.\nVolte e use s em um arquivo ou A para preparar as mudanças.\n\nModelo escolhido: " + safeText(m.aiModelLabel()) + "\nNada será enviado sem arquivos no stage."
 		}
 		if m.busy != "" {
 			body = "Analisando somente o staged…\nEsc cancela e preserva seu rascunho."
-			if m.aiTask == "review" || m.aiTask == "plan" {
+			if isWorkingAnalysis(m.aiTask) {
 				body = "Analisando mudanças elegíveis…\nEsc cancela a análise; arquivos e stage preservados."
 			}
 		}
@@ -395,6 +398,14 @@ func (m *Model) modalView() string {
 		body = "[r] Tentar novamente\n[c] Codex\n[g] Gemini (Antigravity)\n[a] Claude Code\n[l] Regras locais\n\nO rascunho atual permanece preservado."
 		help = "Clique ou r/c/g/a/l escolher · Esc fechar"
 		buttons = "[Voltar]"
+	case "stage-advice":
+		title = "PRÓXIMO COMMIT · RECOMENDAÇÃO DA IA"
+		help = "Enter/a aplicar · PgUp/PgDown/roda rolar · Esc voltar"
+		buttons = applyButton + " [Voltar]"
+	case "stage-confirm":
+		title = "CONFIRMAR STAGE RECOMENDADO"
+		help = "Enter confirmar · Esc cancelar"
+		buttons = "[Confirmar] [Voltar]"
 	case "diff-review":
 		title = "REVISÃO DO DIFF · IA"
 		help = "o organizar commits · PgUp/PgDown/roda rolar · Esc voltar"
@@ -514,9 +525,17 @@ func (m *Model) modalView() string {
 		}
 	}
 	bodyLines := strings.Split(ansi.Wrap(safeText(body), inner, ""), "\n")
-	styled := m.modal == "diff-review" && m.diffReview != nil
+	styled := (m.modal == "diff-review" && m.diffReview != nil) || ((m.modal == "stage-advice" || m.modal == "stage-confirm") && m.stageAdvice != nil)
 	if styled {
-		bodyLines = m.diffReviewLines(inner) // sanitised and wrapped per piece
+		// sanitised and wrapped per piece
+		switch m.modal {
+		case "diff-review":
+			bodyLines = m.diffReviewLines(inner)
+		case "stage-advice":
+			bodyLines = m.stageAdviceLines(inner)
+		default:
+			bodyLines = m.stageConfirmLines(inner)
+		}
 	}
 	limit := m.modalBodyHeight()
 	start := min(m.modalScroll, max(0, len(bodyLines)-limit))

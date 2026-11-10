@@ -71,6 +71,16 @@ func (r *Repository) TrackedPaths(ctx context.Context, dir string) ([]string, er
 	}
 	return nulPaths(raw), nil
 }
+
+// IndexedPaths lists tracked files only; untracked and ignored files are
+// never part of the result.
+func (r *Repository) IndexedPaths(ctx context.Context, dir string) ([]string, error) {
+	raw, err := r.Exec(ctx, dir, "ls-files", "--cached", "-z")
+	if err != nil {
+		return nil, err
+	}
+	return nulPaths(raw), nil
+}
 func (r *Repository) IgnoredPath(ctx context.Context, dir, path string) (bool, error) {
 	raw, err := r.Exec(ctx, dir, "--literal-pathspecs", "ls-files", "--cached", "--others", "--ignored", "--exclude-standard", "-z", "--", path)
 	return raw != "", err

@@ -18,6 +18,7 @@ type automationMsg struct {
 	kind   string
 	plan   *domain.CommitPlan
 	review *domain.DiffReview
+	advice *domain.StageAdvice
 	err    error
 }
 
@@ -45,6 +46,8 @@ func (m *Model) generateAutomation() tea.Cmd {
 		msg := automationMsg{id: id, kind: task}
 		if task == "review" {
 			msg.review, msg.err = core.ReviewDiffAI(ctx, dir, provider, model)
+		} else if task == "stage" {
+			msg.advice, msg.err = core.StageAdviceAI(ctx, dir, provider, model)
 		} else {
 			msg.plan, msg.err = core.PlanCommitsAI(ctx, dir, provider, model)
 		}
@@ -75,6 +78,10 @@ func (m *Model) receiveAutomation(msg automationMsg) tea.Cmd {
 	if msg.review != nil {
 		m.diffReview = msg.review
 		m.modal, m.modalScroll = "diff-review", 0
+	}
+	if msg.advice != nil {
+		m.stageAdvice = msg.advice
+		m.modal, m.modalScroll = "stage-advice", 0
 	}
 	if msg.plan != nil {
 		m.commitPlan = msg.plan

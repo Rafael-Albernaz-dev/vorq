@@ -50,6 +50,7 @@ type CommitRepository interface {
 }
 type ExplorerRepository interface {
 	TrackedPaths(context.Context, string) ([]string, error)
+	IndexedPaths(context.Context, string) ([]string, error) // tracked files only (no untracked)
 	FileDiff(context.Context, string, string, bool) (string, bool, error)
 	IgnoredPath(context.Context, string, string) (bool, error)
 	IgnoredAmong(context.Context, string, []string) (map[string]bool, error)

@@ -277,3 +277,14 @@ Right-click a file in the tree to copy its absolute path from the current worktr
 Claude Code runs with `claude -p` using your subscription login (OAuth). vorq does not use `--bare`, because that mode only accepts API keys; instead it disables every tool (`--tools ""`), MCP servers, slash commands and session persistence, runs in an empty temporary directory, strips `ANTHROPIC_API_KEY` from the environment (no API billing fallback) and enforces the expected JSON with `--json-schema`. Model choices are the Claude Code default and the aliases `fable`, `opus`, `sonnet` and `haiku`; `--model claude-…` also accepts a full model ID.
 
 Limits: message suggestions up to 256 KiB of staged diff (3 minutes); review and commit plans up to 2 MiB per analysis and 1 MiB per file (5 minutes).
+
+### Prepare the next commit with AI
+
+**Preparar próximo commit** in the **IA** tab (or `vorq ai stage`) asks the chosen provider which changed files belong in the next cohesive commit. It sends the eligible working changes (staged or not, excluding ignored, binary, symlink and large files) plus the repository's own **tracked** context documents — root README/CONTRIBUTING, `docs/*.md`, `.github` templates and commit conventions (`.gitmessage`, commitlint), up to 32 KiB each and 96 KiB in total, with truncation marked. Ignored or untracked documents (for example private agent notes) are never sent as context.
+
+The advice lists **PREPARAR** (files for the next commit, with reasons), **DEIXAR DE FORA** (with reasons and risks such as debug code, secrets, generated files, unrelated changes or missing tests required by your docs) and a suggested Conventional Commit message. **[Aplicar]** shows every index change and, after confirmation, makes the stage exactly match the advice: recommended files are staged and held files leave the stage. Only the index changes; working files are never modified, and nothing is committed or pushed. Changes made after the analysis block the apply. The suggested message then fills the commit draft for review.
+
+```bash
+vorq ai stage --provider claude            # show the advice only
+vorq ai stage --provider claude --apply    # confirm, then update the stage
+```

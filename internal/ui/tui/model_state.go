@@ -35,6 +35,7 @@ type commitState struct {
 	aiTask                                                     string
 	commitPlan                                                 *domain.CommitPlan
 	diffReview                                                 *domain.DiffReview
+	stageAdvice                                                *domain.StageAdvice
 	planGroup                                                  int
 	planEditKind, planEditValue                                string
 	aiProvider, aiError                                        string
