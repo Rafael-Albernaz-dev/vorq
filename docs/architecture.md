@@ -56,7 +56,7 @@ vorq/
 │   ├── app/               # Application use cases orchestrating workflows
 │   ├── git/               # Native Git execution wrapper
 │   ├── files/             # File synchronization, validation, and safety inspection
-│   ├── suggest/           # Suggestion engine contracts (rules & local AI models)
+│   ├── suggest/           # Local commit rules and the subscription AI CLI adapter (Codex, Gemini/Antigravity, Claude Code)
 │   ├── ui/
 │   │   ├── cli/           # CLI commands, argument parsing, tabular renderers
 │   │   └── tui/           # Bubble Tea terminal interface
@@ -76,7 +76,7 @@ Embedded Tree-sitter grammars supply lexical categories and local structural rol
 
 ## Safety and application boundaries
 
-`app.Repository` is a consumer-owned port composed of project, workspace, commit, explorer and push operations. It exposes typed metadata instead of `Exec` or native serialization. The composition root wraps the native runner in `git.Repository`; tests can inject failures at that boundary. CLI commands consume smaller workflow interfaces; the Studio contract excludes provisioning and teardown.
+`app.Repository` is a consumer-owned port composed of project, workspace, commit, explorer, push, pull, branch-switch, workflow and automation operations; every capability the use cases need is declared there, and the composition root asserts at compile time that `git.Repository` (and `suggest.CLIProvider` for `app.AIProvider`) implement them, so no use case relies on runtime type assertions. It exposes typed metadata instead of `Exec` or native serialization. The composition root wraps the native runner in `git.Repository`; tests can inject failures at that boundary. CLI commands consume smaller workflow interfaces; the Studio contract excludes provisioning and teardown.
 
 Worktree discovery uses at most four concurrent workers and joins them on cancellation. Failed status, ignored-file or required metadata reads propagate as errors. Safety audits refresh the status immediately before removal. `--force` authorizes known dirty data; it cannot bypass an incomplete audit or active/main-worktree protections. Git alone removes worktrees: any residual path, including a replaced directory or dangling symlink, is preserved and reported as an error.
 
@@ -91,7 +91,7 @@ Only the active worktree retains source and rendered preview buffers. Inactive c
 
 ## Integrated Git workflow
 
-`app.WorkflowService` is shared by CLI and Studio for repository identity, branch creation, history and PR operations. `app.WorkflowRepository` is an additive typed capability of `git.Repository`; existing repository consumers do not need raw execution access. `app.PullRequestProvider` is injected at the CLI composition root as `github.Client`. Its native `gh` commands use structured arguments, an explicit github.com repository, disabled prompts, bounded output and a timeout. PR bodies travel through stdin with `--body-file -`, preserving newlines without shell interpolation. Explicit `--head` on creation prevents implicit branch publication; the application revalidates repository identity, current branch/HEAD and the remote branch OID first.
+`app.WorkflowService` is shared by CLI and Studio for repository identity, branch creation, history and PR operations. `app.WorkflowRepository` exposes Git primitives (remote web URL, branch-name validation, commit resolution, branch creation, history, merge-base diffs); the policies built on them — remote selection (upstream, then `origin`, then the only remote), branch rules and the clean-workspace requirement — live in `internal/app`. `app.PullRequestProvider` is injected at the CLI composition root as `github.Client`. Its native `gh` commands use structured arguments, an explicit github.com repository, disabled prompts, bounded output and a timeout. PR bodies travel through stdin with `--body-file -`, preserving newlines without shell interpolation. Explicit `--head` on creation prevents implicit branch publication; the application revalidates repository identity, current branch/HEAD and the remote branch OID first.
 
 Git history uses native topological graph output with NUL-delimited commit metadata, bounded pages and a ref/HEAD snapshot fingerprint. Changing refs between pages restarts the Studio traversal. Commit details preserve first-parent merge diffs and cap native patch previews at 256 KiB. Local refs never trigger fetch; shallow availability is explicit. PR head/merge OIDs are attached only after a requested GitHub query; a selected SHA can also be searched for PR membership. Truncated PR lists expose their configured limit instead of claiming complete coverage.
 
