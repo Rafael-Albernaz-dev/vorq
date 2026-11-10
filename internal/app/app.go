@@ -16,6 +16,7 @@ type SpawnResult struct {
 	Workspace      *domain.Workspace
 	CopiedFiles    []string
 	IsReusedBranch bool
+	BaseBranch     string // the base actually used (resolved when not given)
 }
 
 // App implements the Service interface coordinating adapters and business logic.

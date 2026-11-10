@@ -513,6 +513,11 @@ func (m *Model) modalView() string {
 		body = m.lastError
 		help = "Esc voltar · PgUp/PgDown rola · nenhum bypass"
 		buttons = "[Voltar]"
+		if m.terminalRetryKind != "" {
+			body += "\n\nO Git/SSH/GPG precisou pedir uma credencial, o que o Studio não permite na própria tela. Nada foi publicado ou commitado nesta tentativa.\n\n[Terminal] (ou t): o Studio é suspenso, a mesma operação revisada roda no terminal normal (com revalidação) e o Studio volta ao terminar."
+			help = "t tentar no terminal · Esc voltar"
+			buttons = terminalRetryButton + "  [Voltar]"
+		}
 	}
 	if m.busy != "" {
 		help = m.spinner() + " " + m.busy

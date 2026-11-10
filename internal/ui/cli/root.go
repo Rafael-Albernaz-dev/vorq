@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
@@ -18,6 +20,7 @@ import (
 	"github.com/Rafael-Albernaz-dev/vorq/internal/ui/tui"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/version"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 )
 
@@ -51,11 +54,18 @@ var (
 
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#BD93F9")).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderBottom(true).
-			BorderForeground(lipgloss.Color("#44475A"))
+			Foreground(lipgloss.Color("#BD93F9"))
 )
+
+// cell pads by visible terminal width (not bytes), so ANSI colors and
+// multi-byte characters never misalign table columns.
+func cell(s string, width int) string {
+	if w := ansi.StringWidth(s); w > width {
+		return ansi.Truncate(s, width, "…")
+	} else {
+		return s + strings.Repeat(" ", width-w)
+	}
+}
 
 // NewRootCmd initializes the root Cobra command and its subcommands.
 func NewRootCmd() *cobra.Command {
@@ -81,6 +91,8 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
+	// Runtime errors print "Error: ..." only; usage is for --help and bad flags.
+	rootCmd.SilenceUsage = true
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show vorq version")
 
 	rootCmd.PersistentFlags().StringVar(&icons, "icons", "emoji", "Ícones da TUI: emoji ou text")
@@ -122,7 +134,12 @@ func NewRootCmd() *cobra.Command {
 
 // Execute runs the root command.
 func Execute() {
-	if err := NewRootCmd().Execute(); err != nil {
+	// Ctrl+C/SIGTERM cancel the command context, so native Git subprocesses
+	// are stopped instead of being orphaned.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := NewRootCmd().ExecuteContext(ctx); err != nil {
+		stop()
 		os.Exit(1)
 	}
 }
@@ -158,23 +175,24 @@ func newDoctorCmd(appCore app.ProjectService) *cobra.Command {
 		Use:   "doctor",
 		Short: "Verify environment health, native Git installation, and current workspace",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			out := cmd.OutOrStdout()
+			ctx := cmd.Context()
 
 			gitVer, err := appCore.GetGitVersion(ctx)
 			if err != nil {
 				return fmt.Errorf("git check failed: %w", err)
 			}
-			fmt.Println(successStyle.Render("✓") + " Native Git: " + gitVer)
+			fmt.Fprintln(out, successStyle.Render("✓")+" Native Git: "+gitVer)
 
 			proj, err := appCore.ResolveProject(ctx, ".")
 			if err != nil {
-				fmt.Println(subtleStyle.Render("ℹ Current directory is not a Git repository (or in a bare tree)."))
+				fmt.Fprintln(out, subtleStyle.Render("ℹ Current directory is not a Git repository (or in a bare tree)."))
 			} else {
-				fmt.Println(successStyle.Render("✓") + " Git Common Dir: " + proj.GitDir)
-				fmt.Println(successStyle.Render("✓") + " Git Root: " + proj.RootPath)
+				fmt.Fprintln(out, successStyle.Render("✓")+" Git Common Dir: "+proj.GitDir)
+				fmt.Fprintln(out, successStyle.Render("✓")+" Git Root: "+proj.RootPath)
 			}
 
-			fmt.Println(successStyle.Render("✓") + " vorq engine initialized successfully.")
+			fmt.Fprintln(out, successStyle.Render("✓")+" vorq engine initialized successfully.")
 			return nil
 		},
 	}
@@ -189,7 +207,8 @@ func newListCmd(appCore interface {
 		Aliases: []string{"ls"},
 		Short:   "List active worktrees and their Git statuses",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			out := cmd.OutOrStdout()
+			ctx := cmd.Context()
 
 			worktrees, err := appCore.ListWorktrees(ctx, ".")
 			if err != nil {
@@ -197,21 +216,22 @@ func newListCmd(appCore interface {
 			}
 
 			if len(worktrees) == 0 {
-				fmt.Println(subtleStyle.Render("No worktrees found."))
+				fmt.Fprintln(out, subtleStyle.Render("No worktrees found."))
 				return nil
 			}
 
 			cwd, _ := os.Getwd()
 			proj, _ := appCore.ResolveProject(ctx, ".")
 
-			fmt.Println()
-			fmt.Printf("%s  %-24s %-32s %-10s %s\n",
-				headerStyle.Render("  "),
-				headerStyle.Render("BRANCH"),
-				headerStyle.Render("PATH"),
-				headerStyle.Render("COMMIT"),
+			fmt.Fprintln(out)
+			fmt.Fprintf(out, "%s %s %s %s %s\n",
+				cell("", 2),
+				cell(headerStyle.Render("BRANCH"), 24),
+				cell(headerStyle.Render("PATH"), 32),
+				cell(headerStyle.Render("COMMIT"), 10),
 				headerStyle.Render("STATUS"),
 			)
+			fmt.Fprintln(out, subtleStyle.Render(strings.Repeat("─", 2+1+24+1+32+1+10+1+6)))
 
 			for _, ws := range worktrees {
 				marker := "  "
@@ -221,7 +241,7 @@ func newListCmd(appCore interface {
 					marker = subtleStyle.Render("○ ")
 				}
 
-				branchName := ws.Branch
+				var branchName string
 				if ws.IsMain {
 					branchName = branchStyle.Render(ws.Branch) + subtleStyle.Render(" (main)")
 				} else {
@@ -283,15 +303,15 @@ func newListCmd(appCore interface {
 					statusBadge = subtleStyle.Render("unknown")
 				}
 
-				fmt.Printf("%s %-24s %-32s %-10s %s\n",
-					marker,
-					branchName,
-					subtleStyle.Render(displayPath),
-					subtleStyle.Render(shortCommit),
+				fmt.Fprintf(out, "%s %s %s %s %s\n",
+					cell(marker, 2),
+					cell(branchName, 24),
+					cell(subtleStyle.Render(displayPath), 32),
+					cell(subtleStyle.Render(shortCommit), 10),
 					statusBadge,
 				)
 			}
-			fmt.Println()
+			fmt.Fprintln(out)
 			return nil
 		},
 	}
@@ -303,7 +323,8 @@ func newStatusCmd(appCore app.WorkspaceReader) *cobra.Command {
 		Short: "Display workspace status, changes, and staged diffs",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			out := cmd.OutOrStdout()
+			ctx := cmd.Context()
 			target := ""
 			if len(args) > 0 {
 				target = args[0]
@@ -314,7 +335,7 @@ func newStatusCmd(appCore app.WorkspaceReader) *cobra.Command {
 				return err
 			}
 
-			fmt.Println()
+			fmt.Fprintln(out)
 			header := fmt.Sprintf("Workspace: %s  |  Branch: %s",
 				titleStyle.Render(ws.Path),
 				branchStyle.Render(ws.Branch),
@@ -322,20 +343,20 @@ func newStatusCmd(appCore app.WorkspaceReader) *cobra.Command {
 			if ws.IsMain {
 				header += subtleStyle.Render(" [main tree]")
 			}
-			fmt.Println(header)
+			fmt.Fprintln(out, header)
 
 			if len(ws.CommitHash) > 7 {
-				fmt.Printf("HEAD: %s", subtleStyle.Render(ws.CommitHash[:7]))
+				fmt.Fprintf(out, "HEAD: %s", subtleStyle.Render(ws.CommitHash[:7]))
 				if cs.Ahead > 0 || cs.Behind > 0 {
-					fmt.Printf(" (ahead %d, behind %d)", cs.Ahead, cs.Behind)
+					fmt.Fprintf(out, " (ahead %d, behind %d)", cs.Ahead, cs.Behind)
 				}
-				fmt.Println()
+				fmt.Fprintln(out)
 			}
-			fmt.Println()
+			fmt.Fprintln(out)
 
 			if cs.IsClean() {
-				fmt.Println(successStyle.Render("✓ Working tree clean (no staged or unstaged changes)"))
-				fmt.Println()
+				fmt.Fprintln(out, successStyle.Render("✓ Working tree clean (no staged or unstaged changes)"))
+				fmt.Fprintln(out)
 				return nil
 			}
 
@@ -358,31 +379,31 @@ func newStatusCmd(appCore app.WorkspaceReader) *cobra.Command {
 			}
 
 			if len(stagedFiles) > 0 {
-				fmt.Println(successStyle.Render("Changes to be committed:") + subtleStyle.Render(" (staged for next commit)"))
+				fmt.Fprintln(out, successStyle.Render("Changes to be committed:")+subtleStyle.Render(" (staged for next commit)"))
 				for _, f := range stagedFiles {
 					pathStr := f.Path
 					if f.OrigPath != "" {
 						pathStr = f.OrigPath + " -> " + f.Path
 					}
-					fmt.Printf("  %s  %s\n", successStyle.Render(f.Staged), pathStr)
+					fmt.Fprintf(out, "  %s  %s\n", successStyle.Render(f.Staged), pathStr)
 				}
-				fmt.Println()
+				fmt.Fprintln(out)
 			}
 
 			if len(unstagedFiles) > 0 {
-				fmt.Println(warnStyle.Render("Changes not staged for commit:") + subtleStyle.Render(" (use 'git add <file>...')"))
+				fmt.Fprintln(out, warnStyle.Render("Changes not staged for commit:")+subtleStyle.Render(" (use 'git add <file>...')"))
 				for _, f := range unstagedFiles {
-					fmt.Printf("  %s  %s\n", warnStyle.Render(f.Unstaged), f.Path)
+					fmt.Fprintf(out, "  %s  %s\n", warnStyle.Render(f.Unstaged), f.Path)
 				}
-				fmt.Println()
+				fmt.Fprintln(out)
 			}
 
 			if len(untrackedFiles) > 0 {
-				fmt.Println(errorStyle.Render("Untracked files:") + subtleStyle.Render(" (unversioned files)"))
+				fmt.Fprintln(out, errorStyle.Render("Untracked files:")+subtleStyle.Render(" (unversioned files)"))
 				for _, f := range untrackedFiles {
-					fmt.Printf("  ?  %s\n", subtleStyle.Render(f.Path))
+					fmt.Fprintf(out, "  ?  %s\n", subtleStyle.Render(f.Path))
 				}
-				fmt.Println()
+				fmt.Fprintln(out)
 			}
 
 			return nil
@@ -401,8 +422,9 @@ func newSpawnCmd(appCore app.WorkspaceService) *cobra.Command {
 		Short: "Create an isolated Git worktree and copy declared local files",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			branch := args[0]
-			ctx := context.Background()
+			ctx := cmd.Context()
 
 			res, err := appCore.SpawnWorkspace(ctx, ".", app.SpawnOptions{
 				BranchName:       branch,
@@ -415,22 +437,25 @@ func newSpawnCmd(appCore app.WorkspaceService) *cobra.Command {
 				return err
 			}
 
-			fmt.Println()
-			fmt.Printf("%s Workspace provisioned successfully!\n", successStyle.Render("✓"))
-			fmt.Println()
-			fmt.Printf("  %-10s %s\n", subtleStyle.Render("Branch:"), branchStyle.Render(res.Workspace.Branch))
-			fmt.Printf("  %-10s %s\n", subtleStyle.Render("Path:"), titleStyle.Render(res.Workspace.Path))
-			if len(res.CopiedFiles) > 0 {
-				fmt.Printf("  %-10s %s\n", subtleStyle.Render("Copied:"), successStyle.Render(strings.Join(res.CopiedFiles, ", ")))
+			fmt.Fprintln(out)
+			fmt.Fprintf(out, "%s Workspace provisioned successfully!\n", successStyle.Render("✓"))
+			fmt.Fprintln(out)
+			fmt.Fprintf(out, "  %-10s %s\n", subtleStyle.Render("Branch:"), branchStyle.Render(res.Workspace.Branch))
+			if res.BaseBranch != "" {
+				fmt.Fprintf(out, "  %-10s %s\n", subtleStyle.Render("Base:"), branchStyle.Render(res.BaseBranch))
 			}
-			fmt.Println()
-			fmt.Println(subtleStyle.Render("To switch to your new workspace:"))
-			fmt.Printf("  cd %s\n\n", res.Workspace.Path)
+			fmt.Fprintf(out, "  %-10s %s\n", subtleStyle.Render("Path:"), titleStyle.Render(res.Workspace.Path))
+			if len(res.CopiedFiles) > 0 {
+				fmt.Fprintf(out, "  %-10s %s\n", subtleStyle.Render("Copied:"), successStyle.Render(strings.Join(res.CopiedFiles, ", ")))
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, subtleStyle.Render("To switch to your new workspace:"))
+			fmt.Fprintf(out, "  cd %s\n\n", res.Workspace.Path)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&baseBranch, "base", "b", "main", "Base branch to branch off from")
+	cmd.Flags().StringVarP(&baseBranch, "base", "b", "", "Base branch (default: repository default branch — origin/HEAD, main or master — else current HEAD)")
 	cmd.Flags().StringVarP(&targetDir, "dir", "d", "", "Custom destination directory for the worktree")
 	cmd.Flags().BoolVarP(&checkoutExisting, "checkout", "c", false, "Checkout existing branch instead of creating new")
 	cmd.Flags().StringSliceVar(&copyFiles, "copy", nil, "Extra files to copy from the main workspace (can be repeated)")
@@ -711,38 +736,39 @@ func newRmCmd(appCore app.WorkspaceService) *cobra.Command {
 		Short:   "Safely teardown a worktree checking for uncommitted and ignored files",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			target := args[0]
-			ctx := context.Background()
+			ctx := cmd.Context()
 
 			report, err := appCore.RemoveWorkspace(ctx, ".", target, force)
 			if err != nil {
-				fmt.Println()
-				fmt.Println(errorStyle.Render("🛑 Worktree Removal Blocked"))
-				fmt.Printf("Safety guards prevented deletion of workspace %s:\n\n", titleStyle.Render(target))
+				fmt.Fprintln(out)
+				fmt.Fprintln(out, errorStyle.Render("🛑 Worktree Removal Blocked"))
+				fmt.Fprintf(out, "Safety guards prevented deletion of workspace %s:\n\n", titleStyle.Render(target))
 
 				if report != nil && len(report.Violations) > 0 {
 					canForce := true
 					for _, v := range report.Violations {
-						fmt.Printf("  %s %s\n", warnStyle.Render("•"), v.Description)
+						fmt.Fprintf(out, "  %s %s\n", warnStyle.Render("•"), v.Description)
 						if v.Type == domain.ViolationMainWorkspace || v.Type == domain.ViolationActiveWorkspace {
 							canForce = false
 						}
 					}
-					fmt.Println()
+					fmt.Fprintln(out)
 					if canForce {
-						fmt.Println(subtleStyle.Render("Hint: To permanently discard uncommitted/ignored files, run:"))
-						fmt.Printf("  vorq rm %s --force\n\n", target)
+						fmt.Fprintln(out, subtleStyle.Render("Hint: To permanently discard uncommitted/ignored files, run:"))
+						fmt.Fprintf(out, "  vorq rm %s --force\n\n", target)
 					}
 				} else {
-					fmt.Printf("  %s %s\n\n", warnStyle.Render("•"), err.Error())
+					fmt.Fprintf(out, "  %s %s\n\n", warnStyle.Render("•"), err.Error())
 				}
 				return err
 			}
 
-			fmt.Println()
-			fmt.Printf("%s Worktree removed successfully!\n", successStyle.Render("✓"))
-			fmt.Printf("  Target: %s\n", subtleStyle.Render(target))
-			fmt.Printf("  %s Branch remains preserved in Git.\n\n", subtleStyle.Render("ℹ Note:"))
+			fmt.Fprintln(out)
+			fmt.Fprintf(out, "%s Worktree removed successfully!\n", successStyle.Render("✓"))
+			fmt.Fprintf(out, "  Target: %s\n", subtleStyle.Render(target))
+			fmt.Fprintf(out, "  %s Branch remains preserved in Git.\n\n", subtleStyle.Render("ℹ Note:"))
 			return nil
 		},
 	}
@@ -756,17 +782,18 @@ func newPruneCmd(appCore app.WorkspaceService) *cobra.Command {
 		Use:   "prune",
 		Short: "Prune linked worktrees information from Git database",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			out, err := appCore.PruneWorkspaces(ctx, ".")
+			out := cmd.OutOrStdout()
+			ctx := cmd.Context()
+			pruned, err := appCore.PruneWorkspaces(ctx, ".")
 			if err != nil {
 				return err
 			}
-			fmt.Println()
-			fmt.Printf("%s Worktree administrative references pruned.\n", successStyle.Render("✓"))
-			if strings.TrimSpace(out) != "" {
-				fmt.Println(subtleStyle.Render(strings.TrimSpace(out)))
+			fmt.Fprintln(out)
+			fmt.Fprintf(out, "%s Worktree administrative references pruned.\n", successStyle.Render("✓"))
+			if strings.TrimSpace(pruned) != "" {
+				fmt.Fprintln(out, subtleStyle.Render(strings.TrimSpace(pruned)))
 			}
-			fmt.Println()
+			fmt.Fprintln(out)
 			return nil
 		},
 	}

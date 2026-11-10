@@ -57,6 +57,8 @@ type dialogState struct {
 	branchIndex                              int
 	branchSwitchPlan                         *domain.BranchSwitchPlan
 	resultKind, resultBody, modal, lastError string
+	terminalRetryKind                        string
+	lastPRDraft                              *domain.PRDraft
 	modalScroll                              int
 	discardPlan                              *domain.DiscardPlan
 	pushTarget                               *domain.PushTarget

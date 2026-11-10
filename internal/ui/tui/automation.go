@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
@@ -79,8 +81,12 @@ func (m *Model) receiveAutomation(msg automationMsg) tea.Cmd {
 		m.modal, m.modalScroll = "plan", 0
 	}
 	if msg.err != nil {
+		var needs *domain.TerminalRequiredError
 		if msg.plan == nil {
 			m.aiFailure(msg.err)
+		} else if errors.As(msg.err, &needs) {
+			m.showError("Plano interrompido", msg.err)
+			m.offerTerminalRetry(msg.kind, msg.err)
 		} else {
 			m.notice = "Plano interrompido: " + msg.err.Error()
 		}
@@ -96,11 +102,17 @@ func (m *Model) executeAutomationPlan() tea.Cmd {
 	if !m.canAct() || m.commitPlan == nil {
 		return nil
 	}
+	op, ctx := m.planOp(), m.ctx
+	return func() tea.Msg { return op(ctx) }
+}
+
+// planOp resumes the plan from its current (saved) progress.
+func (m *Model) planOp() operation {
 	m.dialogID++
-	id, core, dir, plan, ctx := m.dialogID, m.core, m.dir, m.commitPlan, m.ctx
+	id, core, dir, plan := m.dialogID, m.core, m.dir, m.commitPlan
 	m.busy = "Executando commits aprovados…"
 	m.mutating = true
-	return func() tea.Msg {
+	return func(ctx context.Context) tea.Msg {
 		p, err := core.ExecuteCommitPlan(ctx, dir, plan)
 		return automationMsg{id: id, kind: "execute", plan: p, err: err}
 	}

@@ -237,11 +237,12 @@ func (m *Model) submitWorkflowForm() tea.Cmd {
 		m.prOptions.State = m.fields[1].Value
 		return m.loadPRs()
 	}
-	m.dialogID++
-	id, core, dir, ctx := m.dialogID, m.core, m.dir, m.ctx
-	m.mutating = true
-	m.busy = "Executando operação confirmada…"
+	ctx := m.ctx
 	if m.formKind == "branch" {
+		m.dialogID++
+		id, core, dir := m.dialogID, m.core, m.dir
+		m.mutating = true
+		m.busy = "Executando operação confirmada…"
 		o := domain.BranchOptions{Name: m.fields[0].Value, Base: m.fields[1].Value, Stay: m.fields[2].Value != "sim"}
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -261,7 +262,18 @@ func (m *Model) submitWorkflowForm() tea.Cmd {
 	} else {
 		d.RemoveLabels = csvValues(m.fields[5].Value)
 	}
-	return func() tea.Msg {
+	m.lastPRDraft = &d
+	op := m.prOp()
+	return func() tea.Msg { return op(ctx) }
+}
+
+// prOp saves the reviewed PR draft; the core revalidates branch/HEAD.
+func (m *Model) prOp() operation {
+	m.dialogID++
+	id, core, dir, d := m.dialogID, m.core, m.dir, *m.lastPRDraft
+	m.mutating = true
+	m.busy = "Executando operação confirmada…"
+	return func(ctx context.Context) tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 		result, e := core.SavePullRequest(ctx, dir, d)

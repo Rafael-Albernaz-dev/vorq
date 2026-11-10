@@ -22,8 +22,13 @@ func (a *App) SpawnWorkspace(ctx context.Context, currentDir string, opts SpawnO
 		return nil, fmt.Errorf("branch name is required")
 	}
 
-	if opts.BaseBranch == "" {
-		opts.BaseBranch = proj.DefaultBaseBranch
+	if err := files.ValidateDeclared(proj.RootPath, opts.CopyFiles); err != nil {
+		return nil, err
+	}
+	if opts.BaseBranch == "" && !opts.CheckoutExisting {
+		if opts.BaseBranch, err = a.defaultBase(ctx, proj.RootPath); err != nil {
+			return nil, err
+		}
 	}
 
 	// 1. Pre-flight check on branch
@@ -87,7 +92,34 @@ func (a *App) SpawnWorkspace(ctx context.Context, currentDir string, opts SpawnO
 		},
 		CopiedFiles:    copiedFiles,
 		IsReusedBranch: opts.CheckoutExisting,
+		BaseBranch:     opts.BaseBranch,
 	}, nil
+}
+
+// defaultBase picks the repository's default branch for new workspaces: the
+// remote default (origin/HEAD) when it exists locally, then main or master,
+// and finally the current HEAD. It never fetches.
+func (a *App) defaultBase(ctx context.Context, root string) (string, error) {
+	var candidates []string
+	if r, ok := a.gitRunner.(WorkflowRepository); ok {
+		if name, err := r.DefaultBranch(ctx, root); err == nil && name != "" {
+			candidates = append(candidates, name)
+		}
+	}
+	candidates = append(candidates, "main", "master")
+	for _, name := range candidates {
+		exists, err := a.gitRunner.BranchExists(ctx, root, name)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			return name, nil
+		}
+	}
+	if branch, err := a.gitRunner.CurrentBranch(ctx, root); err == nil && branch != "" {
+		return branch, nil
+	}
+	return "HEAD", nil
 }
 
 func (a *App) PruneWorkspaces(ctx context.Context, currentDir string) (string, error) {

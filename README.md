@@ -127,8 +127,13 @@ vorq doctor
 # List all active worktrees and their Git statuses
 vorq list
 
-# Provision an isolated Git worktree with automatic .env copy
-vorq spawn feat/my-new-task --base main
+# Provision an isolated Git worktree with automatic .env copy.
+# Without --base, the repository default branch is used (origin/HEAD, then
+# main/master, else the current HEAD); the chosen base is printed.
+vorq spawn feat/my-new-task
+vorq spawn feat/hotfix --base release/1.2 --copy config/local.yml
+# --copy accepts workspace-relative regular files only; missing files, symlinks,
+# ".." and .git paths are rejected before anything is created.
 
 # Review workspace status and staged/unstaged changes
 vorq status
@@ -189,6 +194,8 @@ The explicit CLI command sends the staged diff immediately and prints a suggesti
 The right panel has clickable **Commit / Git / PRs / Worktrees** tabs. Commit retains the message editor; Git offers branch creation, switching existing local branches, history, push review and branch updates; PRs offers list/create actions; Worktrees opens the existing workspace chooser. Switching tabs preserves the commit draft and performs no GitHub/network operation. Buttons open the same flows as keyboard shortcuts. In compact mode, click **Ações** in the top pane navigation first. With the right pane focused and outside text editing, Left/Right switches tabs and Up/Down/Tab selects an action; Enter opens it.
 
 Click the **↑ ahead** counter beside the branch to review a push, or the **↓ behind** counter to review a fast-forward update. Neither click immediately transfers commits. Counts describe locally known refs and can be stale. Updating requires an attached branch, configured upstream and a clean workspace (including untracked files); ignored-file collisions are refused. After confirmation, vorq fetches the selected remote branch, checks HEAD/source/status again, and applies the fetched commit using fast-forward only. Divergence is refused; no merge commit, rebase, automatic stash or discard is performed. Fetch can update remote-tracking refs even if application is later blocked. The same workflow is available as `vorq pull`, with a displayed source and explicit `y` confirmation (`--yes` for scripts).
+
+**Credentials and signing in the Studio.** The Studio owns the screen, so Git, SSH and GPG never prompt inside it: push, update, PR checks, commits and approved plans run without terminal prompts. If an operation needs a password, token, SSH passphrase or GPG PIN, it stops before publishing or committing and the error offers **[Terminal]** (`t`): the Studio is suspended, the same reviewed operation runs again in your normal terminal (where the prompt appears, with the same revalidation), and the Studio returns with the result. Cached credentials (credential helper, ssh-agent, gpg-agent) keep working without any prompt. The CLI commands prompt normally in your terminal.
 
 Press `b` in the Studio to create a branch, `H` for history, or `P` for PRs. Form input treats letters (including `q`) as text: `Tab` changes fields, `Ctrl+U` clears a field, `Ctrl+S` opens review, and `Enter` confirms from review. `Esc` cancels. Branch creation enters the new branch by default; choose another base only with a clean workspace. Ignored-file collisions are refused even with an otherwise clean status. New branches require an existing first commit.
 

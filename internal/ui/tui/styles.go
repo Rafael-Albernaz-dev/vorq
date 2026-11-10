@@ -92,13 +92,6 @@ func renderTabs(labels []string, active, width int) string {
 	return top.String() + "\n" + middle.String() + "\n" + bottom.String()
 }
 
-func tabLabel(label string, active bool) string {
-	if active {
-		return activeTabStyle.Render("[" + label + "]")
-	}
-	return inactiveTabStyle.Render(" " + label + " ")
-}
-
 // Treat repository text as text, never as terminal escape sequences.
 func safeText(s string) string {
 	s = strings.ReplaceAll(s, "\t", "    ")

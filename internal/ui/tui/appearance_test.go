@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	"strings"
@@ -8,7 +9,7 @@ import (
 )
 
 func TestAppearancePaletteChangesOnlySGRAndKeepsTokensLocal(t *testing.T) {
-	m := NewModel(nil, nil, "/workspace")
+	m := NewModel(context.TODO(), nil, "/workspace")
 	original := ColorBg
 	for i := range studioPalettes {
 		m.themeIndex = i
@@ -30,7 +31,7 @@ func TestAppearanceAdaptsTo256ColorOutput(t *testing.T) {
 	previous := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.ANSI256)
 	defer lipgloss.SetColorProfile(previous)
-	m := NewModel(nil, nil, "/workspace")
+	m := NewModel(context.TODO(), nil, "/workspace")
 	m.themeIndex = 6
 	base := "\x1b[" + termenv.ANSI256.Color("#1a1b26").Sequence(true) + "mbody\x1b[0m"
 	got := m.applyTheme(base)

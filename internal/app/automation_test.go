@@ -238,7 +238,9 @@ func TestAutomationRenameDeletionExclusionsAndFileMode(t *testing.T) {
 	r := newTestRunner(t)
 	// A staged rename must include its source deletion in the approved diff.
 	writeCommitFile(t, dir, "b.txt", "base\n")
-	if err := r.Add(ctx, dir, "b.txt"); err != nil { t.Fatal(err) }
+	if err := r.Add(ctx, dir, "b.txt"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.Exec(ctx, dir, "mv", "b.txt", "renamed ação.txt"); err != nil {
 		t.Fatal(err)
 	}

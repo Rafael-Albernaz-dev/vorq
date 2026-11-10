@@ -30,11 +30,17 @@ func (m *Model) pull() tea.Cmd {
 	if !m.canAct() || m.pullTarget == nil {
 		return nil
 	}
+	op, ctx := m.pullOp(), m.ctx
+	return func() tea.Msg { return op(ctx) }
+}
+
+// pullOp fetches and fast-forwards the reviewed target; the core revalidates.
+func (m *Model) pullOp() operation {
 	m.dialogID++
-	id, core, dir, target, ctx := m.dialogID, m.core, m.dir, *m.pullTarget, m.ctx
+	id, core, dir, target := m.dialogID, m.core, m.dir, *m.pullTarget
 	m.busy = "Buscando e aplicando fast-forward…"
 	m.mutating = true
-	return func() tea.Msg {
+	return func(ctx context.Context) tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
 		result, err := core.PullChanges(ctx, dir, target)

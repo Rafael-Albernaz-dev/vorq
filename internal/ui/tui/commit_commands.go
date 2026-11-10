@@ -96,11 +96,17 @@ func (m *Model) commit() tea.Cmd {
 	if !m.canAct() {
 		return nil
 	}
+	op, ctx := m.commitOp(), m.ctx
+	return func() tea.Msg { return op(ctx) }
+}
+
+// commitOp creates the reviewed commit; the core rejects a changed stage.
+func (m *Model) commitOp() operation {
 	m.dialogID++
-	id, core, dir, message, diff, ctx := m.dialogID, m.core, m.dir, m.reviewMessage, m.reviewDiff, m.ctx
+	id, core, dir, message, diff := m.dialogID, m.core, m.dir, m.reviewMessage, m.reviewDiff
 	m.busy = "Criando commit local…"
 	m.mutating = true
-	return func() tea.Msg {
+	return func(ctx context.Context) tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		result, err := core.CreateReviewedCommit(ctx, dir, message, diff)
@@ -136,11 +142,17 @@ func (m *Model) push() tea.Cmd {
 	if m.pushTarget == nil {
 		return nil
 	}
+	op, ctx := m.pushOp(), m.ctx
+	return func() tea.Msg { return op(ctx) }
+}
+
+// pushOp publishes to the reviewed target; the core revalidates it.
+func (m *Model) pushOp() operation {
 	m.dialogID++
-	id, core, dir, target, ctx := m.dialogID, m.core, m.dir, *m.pushTarget, m.ctx
+	id, core, dir, target := m.dialogID, m.core, m.dir, *m.pushTarget
 	m.busy = "Publicando no destino confirmado…"
 	m.mutating = true
-	return func() tea.Msg {
+	return func(ctx context.Context) tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		result, err := core.PushChanges(ctx, dir, domain.PushOptions{Target: target})

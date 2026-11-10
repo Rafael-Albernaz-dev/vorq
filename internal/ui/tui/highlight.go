@@ -106,9 +106,6 @@ func highlightCodeSnippet(filename, source, theme string) string {
 
 // Highlight each hunk's old/new sides as separate snippets. Prefixes remain
 // owned by the diff renderer, and metadata never enters a language lexer.
-func highlightDiffLines(filename, text, theme string) map[int]string {
-	return highlightDiffLinesContext(context.Background(), filename, text, theme)
-}
 
 func highlightDiffLinesContext(ctx context.Context, filename, text, theme string) map[int]string {
 	lines := strings.Split(strings.TrimSuffix(safeText(text), "\n"), "\n")

@@ -16,5 +16,5 @@ func (a *App) ResolveProject(ctx context.Context, dir string) (*domain.Project, 
 	if err != nil {
 		return nil, fmt.Errorf("not a git repository (or any parent up to mount point): %w", err)
 	}
-	return &domain.Project{ID: common, RootPath: root, GitDir: common, DefaultBaseBranch: "main"}, nil
+	return &domain.Project{ID: common, RootPath: root, GitDir: common, DefaultBaseBranch: ""}, nil
 }
