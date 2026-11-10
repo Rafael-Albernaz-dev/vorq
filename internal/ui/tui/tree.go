@@ -142,6 +142,32 @@ func (m *Model) rebuildTree() {
 	m.restoreSelection(treePosition{})
 }
 
+// rebuildPreserving rebuilds rows after asynchronous data arrives without
+// moving the user: the selection follows its path and the scroll offset stays.
+func (m *Model) rebuildPreserving() {
+	p := m.pendingSelection
+	if p.path == "" && m.selected >= 0 && m.selected < len(m.rows) && m.rows[m.selected].node != nil {
+		p = treePosition{path: m.rows[m.selected].node.Path, group: m.rows[m.selected].group}
+	}
+	offset := m.treeOffset
+	m.rebuildTree()
+	if p.path != "" {
+		found := -1
+		for i, row := range m.rows {
+			if row.node != nil && row.node.Path == p.path && (found < 0 || row.group == p.group) {
+				found = i
+			}
+		}
+		if found >= 0 {
+			m.selected = found
+			if m.pendingSelection.path == p.path {
+				m.pendingSelection = treePosition{}
+			}
+		}
+	}
+	m.treeOffset = min(max(0, offset), max(0, len(m.rows)-m.bodyHeight()))
+}
+
 func (m *Model) selectedNode() *domain.TreeNode {
 	if m.selected >= 0 && m.selected < len(m.rows) {
 		return m.rows[m.selected].node

@@ -92,7 +92,7 @@ func (m *Model) receiveInventory(msg inventoryMsg) tea.Cmd {
 	node.Lazy = false
 	m.inventoryCount = m.studio.Root.FileCount()
 	m.notice = "Pasta carregada; arquivos ignorados não entram em Alterações."
-	m.rebuildTree()
+	m.rebuildPreserving()
 	return nil
 }
 func (m *Model) copyFilePath(path string) tea.Cmd {

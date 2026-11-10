@@ -107,7 +107,7 @@ Discard opens a confirmation dialog with the exact path and impact. New staged f
 | `c` | Global | Open **Guided Commit** modal (type, heuristic message & editor) |
 | `p` | Global | Open **Explicit Push** modal with visible remote target |
 | `w` | Global | Open **Worktrees** switcher modal |
-| `r` | Global | Refresh repository status |
+| `r` / **[↻ Atualizar]** | Global | Re-read the workspace. The Studio never refreshes on a timer: selection, scroll, open file and expanded folders stay put; vorq re-reads after its own actions and when you click **Atualizar** |
 | `?` | Global | Toggle Help overlay |
 | `Esc` | Modals | Cancel / close modal (preserving current stage) |
 | `q` or `Ctrl + C` | Global | Exit and cleanly restore terminal |

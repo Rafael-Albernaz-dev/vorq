@@ -75,6 +75,36 @@ func (r *Repository) IgnoredPath(ctx context.Context, dir, path string) (bool, e
 	raw, err := r.Exec(ctx, dir, "--literal-pathspecs", "ls-files", "--cached", "--others", "--ignored", "--exclude-standard", "-z", "--", path)
 	return raw != "", err
 }
+
+// IgnoredAmong classifies many paths with one native check-ignore call,
+// including descendants of ignored directories. Tracked paths are never
+// reported, matching Git's exclude semantics.
+func (r *Repository) IgnoredAmong(ctx context.Context, dir string, paths []string) (map[string]bool, error) {
+	ignored := map[string]bool{}
+	if len(paths) == 0 {
+		return ignored, nil
+	}
+	var input strings.Builder
+	for _, path := range paths {
+		if path == "" || strings.ContainsRune(path, 0) {
+			return nil, fmt.Errorf("invalid path for ignore check")
+		}
+		input.WriteString(path)
+		input.WriteByte(0)
+	}
+	raw, err := r.input(ctx, dir, strings.NewReader(input.String()), nil, "check-ignore", "-z", "--stdin")
+	if err != nil {
+		var exit *exec.ExitError
+		if ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() == 1 {
+			return ignored, nil // none of the paths is ignored
+		}
+		return nil, err
+	}
+	for _, path := range nulPaths(raw) {
+		ignored[path] = true
+	}
+	return ignored, nil
+}
 func (r *Repository) IndexEntry(ctx context.Context, dir, path string) (*domain.GitEntry, error) {
 	raw, err := r.Exec(ctx, dir, "--literal-pathspecs", "ls-files", "--stage", "-z", "--", path)
 	if err != nil {

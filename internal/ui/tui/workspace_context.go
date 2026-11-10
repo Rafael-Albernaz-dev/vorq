@@ -20,10 +20,17 @@ func (m *Model) draftMessage() string {
 }
 
 func (m *Model) UpdateTree(tree *domain.WorkspaceTree) tea.Cmd {
+	refreshing := m.studio != nil && len(m.rows) > 0 && m.studio.Workspace.Path == tree.Workspace.Path
 	if len(m.rows) > 0 {
 		m.rememberTree()
 	}
 	p := m.positions[m.activeTab]
+	offset := m.treeOffset
+	reload := m.reloadInventory
+	m.reloadInventory = false
+	if refreshing && !reload {
+		carryInventory(m.studio.Root, tree.Root)
+	}
 	m.studio = tree
 	m.snapshotSummary = tree.Changes.Summary()
 	m.stale = false
@@ -31,6 +38,18 @@ func (m *Model) UpdateTree(tree *domain.WorkspaceTree) tea.Cmd {
 	m.dir = tree.Workspace.Path
 	m.rebuildTree()
 	m.restoreSelection(p)
+	m.pendingSelection = treePosition{}
+	if node := m.selectedNode(); p.path != "" && (node == nil || node.Path != p.path) {
+		// The selected file may live in an expanded folder that is still being
+		// read; restore it when that folder arrives instead of jumping.
+		m.pendingSelection = p
+	}
+	if refreshing {
+		// A refresh must not move the list the user is looking at: keep the
+		// previous scroll position (only clamped to the new length) instead of
+		// re-anchoring the viewport on the selection.
+		m.treeOffset = min(max(0, offset), max(0, len(m.rows)-m.bodyHeight()))
+	}
 	commands := []tea.Cmd{m.loadSelected()}
 	var walk func(*domain.TreeNode)
 	walk = func(n *domain.TreeNode) {
@@ -43,6 +62,28 @@ func (m *Model) UpdateTree(tree *domain.WorkspaceTree) tea.Cmd {
 	}
 	walk(tree.Root)
 	return tea.Batch(commands...)
+}
+
+// carryInventory moves already loaded children of lazy (ignored) directories
+// from the previous snapshot into the new one, so a refresh neither empties
+// expanded folders nor shifts the selection to another file.
+func carryInventory(previous, next *domain.TreeNode) {
+	if previous == nil || next == nil {
+		return
+	}
+	if next.Lazy && !previous.Lazy && previous.IsDir && len(previous.Children) > 0 {
+		next.Children, next.Lazy = previous.Children, false
+		return
+	}
+	old := map[string]*domain.TreeNode{}
+	for _, c := range previous.Children {
+		old[c.Path] = c
+	}
+	for _, c := range next.Children {
+		if prior := old[c.Path]; prior != nil && prior.IsDir && c.IsDir {
+			carryInventory(prior, c)
+		}
+	}
 }
 
 func (m *Model) saveWorkspaceContext() {

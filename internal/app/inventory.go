@@ -90,8 +90,24 @@ func (a *App) ReadInventoryDirectory(ctx context.Context, dir, path string, offs
 			}
 		}
 	}
+	// Classify the whole page first, using one native call for every entry
+	// Git does not already know about (never one subprocess per entry).
+	end := min(len(entries), offset+InventoryPageSize)
+	var unknown []string
+	for i := offset; i < end; i++ {
+		entry := entries[i]
+		p := filepath.ToSlash(filepath.Join(path, entry.Name()))
+		if entry.Name() == ".git" || known[p] || statuses[p].IsUntracked() || (entry.IsDir() && directories[p] != "") {
+			continue
+		}
+		unknown = append(unknown, p)
+	}
+	ignoredSet, err := a.gitRunner.IgnoredAmong(ctx, proj.RootPath, unknown)
+	if err != nil {
+		return nil, err
+	}
 	var nodes []*domain.TreeNode
-	for i := offset; i < len(entries) && i < offset+InventoryPageSize; i++ {
+	for i := offset; i < end; i++ {
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -101,20 +117,20 @@ func (a *App) ReadInventoryDirectory(ctx context.Context, dir, path string, offs
 		}
 		p := filepath.ToSlash(filepath.Join(path, entry.Name()))
 		tracking := "tracked"
-		if entry.IsDir() && directories[p] != "" {
+		switch {
+		case entry.IsDir() && directories[p] != "":
 			tracking = directories[p]
-		} else if statuses[p].IsUntracked() {
+		case statuses[p].IsUntracked():
 			tracking = "untracked"
-		} else if !known[p] {
-			ignored, e := a.gitRunner.IgnoredPath(ctx, proj.RootPath, p)
-			if e != nil {
-				return nil, e
-			}
-			if ignored {
-				tracking = "ignored"
-			} else {
-				tracking = "untracked"
-			}
+		case known[p]:
+		case ignoredSet[p]:
+			tracking = "ignored"
+		case entry.IsDir() && !emptyDirectory(root, p):
+			// Git lists no tracked or untracked descendant, so every file
+			// inside is excluded even if the directory itself is not.
+			tracking = "ignored"
+		default:
+			tracking = "untracked"
 		}
 		nodes = append(nodes, &domain.TreeNode{Name: entry.Name(), Path: p, IsDir: entry.IsDir(), Lazy: entry.IsDir(), Tracking: tracking, Status: statuses[p]})
 	}
@@ -122,6 +138,16 @@ func (a *App) ReadInventoryDirectory(ctx context.Context, dir, path string, offs
 		nodes = append(nodes, &domain.TreeNode{Name: "Carregar mais…", Path: path, More: true, MoreOffset: offset + InventoryPageSize})
 	}
 	return nodes, nil
+}
+
+func emptyDirectory(root *os.Root, path string) bool {
+	f, err := root.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	names, _ := f.Readdirnames(1)
+	return len(names) == 0
 }
 
 func (a *App) AbsoluteFilePath(ctx context.Context, dir, path string) (string, error) {

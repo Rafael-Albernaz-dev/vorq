@@ -121,7 +121,7 @@ func (r *NativeRunner) ListWorktrees(ctx context.Context, repoDir string) (strin
 
 // Status executes `git status --porcelain -z`.
 func (r *NativeRunner) Status(ctx context.Context, wsDir string) (string, error) {
-	return r.Exec(ctx, wsDir, "status", "--porcelain", "-z")
+	return r.Exec(ctx, wsDir, "--no-optional-locks", "status", "--porcelain", "-z")
 }
 
 // AheadBehind queries commits ahead and behind upstream. Returns (0, 0, nil) if no upstream is set.
@@ -140,8 +140,18 @@ func (r *NativeRunner) AheadBehind(ctx context.Context, wsDir string) (int, int,
 	if err != nil {
 		return 0, 0, err
 	}
-	if strings.TrimSuffix(upstream, "\n") == "" {
+	upstream = strings.TrimSuffix(upstream, "\n")
+	if upstream == "" {
 		return 0, 0, nil
+	}
+	// A configured upstream whose remote-tracking ref was pruned ("[gone]",
+	// typical after a merged PR) has nothing to compare; it is not a failure.
+	if _, err := r.Exec(ctx, wsDir, "rev-parse", "--verify", "--quiet", "--end-of-options", upstream+"^{commit}"); err != nil {
+		var exit *exec.ExitError
+		if ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() == 1 {
+			return 0, 0, nil
+		}
+		return 0, 0, err
 	}
 	out, err := r.Exec(ctx, wsDir, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
 	if err != nil {
@@ -381,7 +391,7 @@ func (r *NativeRunner) BranchDelete(ctx context.Context, repoDir, branch string,
 
 // IgnoredFiles returns a list of files or directories ignored by Git in the specified workspace.
 func (r *NativeRunner) IgnoredFiles(ctx context.Context, wsDir string) ([]string, error) {
-	out, err := r.Exec(ctx, wsDir, "status", "--porcelain=v1", "--ignored", "-z")
+	out, err := r.Exec(ctx, wsDir, "--no-optional-locks", "status", "--porcelain=v1", "--ignored", "-z")
 	if err != nil {
 		return nil, err
 	}

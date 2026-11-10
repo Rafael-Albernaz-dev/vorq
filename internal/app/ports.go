@@ -52,6 +52,7 @@ type ExplorerRepository interface {
 	TrackedPaths(context.Context, string) ([]string, error)
 	FileDiff(context.Context, string, string, bool) (string, bool, error)
 	IgnoredPath(context.Context, string, string) (bool, error)
+	IgnoredAmong(context.Context, string, []string) (map[string]bool, error)
 	IndexEntry(context.Context, string, string) (*domain.GitEntry, error)
 	RemoveIndexEntry(context.Context, string, string) error
 	RestoreFile(context.Context, string, string, bool) error

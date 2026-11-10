@@ -20,6 +20,7 @@ import (
 type observedService struct {
 	app.Service
 	stageCalls, commitCalls, pushCalls int
+	inventoryCalls                     int
 }
 
 func (s *observedService) ToggleStage(ctx context.Context, dir, path string) error {
