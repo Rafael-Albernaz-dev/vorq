@@ -18,14 +18,16 @@ type ChangeSnapshot struct {
 	Files     []SnapshotFile `json:"files"`
 }
 type ReviewFinding struct {
-	FileID   string `json:"file_id"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
-	Evidence string `json:"evidence"`
+	FileID     string `json:"file_id"`
+	Severity   string `json:"severity"`
+	Message    string `json:"message"`
+	Evidence   string `json:"evidence"`
+	Suggestion string `json:"suggestion,omitempty"`
 }
 type DiffReview struct {
 	Summary  string          `json:"summary"`
 	Findings []ReviewFinding `json:"findings"`
+	Dropped  int             `json:"dropped,omitempty"` // invalid findings removed by validation
 	Snapshot ChangeSnapshot  `json:"snapshot"`
 }
 type PlannedCommit struct {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"strings"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
@@ -281,6 +282,9 @@ func fillPanel(lines []string, width, height int, bg lipgloss.Color) string {
 
 func (m *Model) modalView() string {
 	width := min(90, m.width-6)
+	if m.modal == "diff-review" {
+		width = min(140, m.width-4) // long technical text reads better wider
+	}
 	inner := width - 4
 	var title, body, help, buttons string
 	if m.modal == "workflow" {
@@ -341,18 +345,18 @@ func (m *Model) modalView() string {
 		buttons = "[Voltar]"
 	case "suggest":
 		title = "SUGERIR CONVENTIONAL COMMIT"
-		body = "Sugerir com IA (inglês):\n[c] Codex   [g] Gemini (Antigravity)\n\nRegras locais — escolha o tipo:\n[1] feat   [2] fix    [3] chore    [4] refactor\n[5] docs   [6] test   [7] style    [8] perf\n\nIA: prévia antes de substituir o rascunho.\nRegras: preservam a descrição existente."
-		help = "c/g IA · 1–8 regras locais · Esc cancelar"
+		body = "Sugerir com IA (inglês):\n" + providerMenu + "\n\nRegras locais — escolha o tipo:\n[1] feat   [2] fix    [3] chore    [4] refactor\n[5] docs   [6] test   [7] style    [8] perf\n\nIA: prévia antes de substituir o rascunho.\nRegras: preservam a descrição existente."
+		help = "c/g/a IA · 1–8 regras locais · Esc cancelar"
 		if m.aiTask != "" && m.aiTask != "suggest" {
-			body = "Escolha o provedor:\n[c] Codex   [g] Gemini (Antigravity)\n\nDepois escolha o modelo. Inglês por padrão."
-			help = "c/g provedor · Esc voltar"
+			body = "Escolha o provedor:\n" + providerMenu + "\n\nDepois escolha o modelo. Inglês por padrão."
+			help = "c/g/a provedor · Esc voltar"
 		}
 		buttons = "[Voltar]"
 	case "ai-send":
 		title = "SUGERIR COM IA · " + m.aiProvider
-		body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar somente o diff staged ao provedor escolhido.\nInglês · até 48 KiB · timeout de 90 segundos.\n\nO conteúdo sai desta máquina e usa a cota da assinatura.\nA resposta será revisada antes de substituir resumo e descrição.\nNenhum commit ou push será executado."
+		body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar somente o diff staged ao provedor escolhido.\n" + fmt.Sprintf("Inglês · até %d KiB · timeout de %d min.", app.MaxAIDiffBytes/1024, int(app.AISuggestTimeout.Minutes())) + "\n\nO conteúdo sai desta máquina e usa a cota da assinatura.\nA resposta será revisada antes de substituir resumo e descrição.\nNenhum commit ou push será executado."
 		if m.aiTask == "review" || m.aiTask == "plan" {
-			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nAnalisar versões de trabalho das mudanças rastreadas e novos arquivos elegíveis, incluindo fora do stage.\nIgnorados, binários, links e arquivos grandes serão listados como excluídos.\n\nAté 512 KiB por análise; sem truncamento silencioso.\nO conteúdo sai desta máquina e usa a cota da assinatura.\nNenhum stage ou commit até aprovar o plano."
+			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nAnalisar versões de trabalho das mudanças rastreadas e novos arquivos elegíveis, incluindo fora do stage.\nIgnorados, binários, links e arquivos grandes serão listados como excluídos.\n\n" + fmt.Sprintf("Até %d MiB por análise e 1 MiB por arquivo; sem truncamento silencioso.", app.AnalysisLimit/(1024*1024)) + "\nO conteúdo sai desta máquina e usa a cota da assinatura.\nNenhum stage ou commit até aprovar o plano."
 		}
 		if m.changeSummary().Staged == 0 && m.aiTask != "review" && m.aiTask != "plan" {
 			body = "Nenhum arquivo no stage.\nVolte e use s em um arquivo ou A para preparar as mudanças.\n\nModelo escolhido: " + safeText(m.aiModelLabel()) + "\nNada será enviado sem arquivos no stage."
@@ -384,17 +388,16 @@ func (m *Model) modalView() string {
 	case "ai-error":
 		title = "SUGESTÃO NÃO GERADA · " + m.aiProvider
 		body = safeText(m.aiError) + "\n\nSeu rascunho foi preservado.\nAbra Opções para repetir, escolher outro provedor ou usar regras locais."
-		help = "o opções · r repetir · c/g provedor · l regras · Esc voltar"
+		help = "o opções · r repetir · c/g/a provedor · l regras · Esc voltar"
 		buttons = "[Opções] [Voltar]"
 	case "ai-options":
 		title = "OPÇÕES DA SUGESTÃO"
-		body = "[r] Tentar novamente\n[c] Codex\n[g] Gemini (Antigravity)\n[l] Regras locais\n\nO rascunho atual permanece preservado."
-		help = "Clique ou r/c/g/l escolher · Esc fechar"
+		body = "[r] Tentar novamente\n[c] Codex\n[g] Gemini (Antigravity)\n[a] Claude Code\n[l] Regras locais\n\nO rascunho atual permanece preservado."
+		help = "Clique ou r/c/g/a/l escolher · Esc fechar"
 		buttons = "[Voltar]"
 	case "diff-review":
 		title = "REVISÃO DO DIFF · IA"
-		body = m.diffReviewBody()
-		help = "o organizar commits · PgUp/PgDown rolar · Esc voltar"
+		help = "o organizar commits · PgUp/PgDown/roda rolar · Esc voltar"
 		buttons = "[Organizar] [Voltar]"
 	case "plan":
 		title = "PLANO DE COMMITS · REVISAR"
@@ -511,12 +514,20 @@ func (m *Model) modalView() string {
 		}
 	}
 	bodyLines := strings.Split(ansi.Wrap(safeText(body), inner, ""), "\n")
+	styled := m.modal == "diff-review" && m.diffReview != nil
+	if styled {
+		bodyLines = m.diffReviewLines(inner) // sanitised and wrapped per piece
+	}
 	limit := m.modalBodyHeight()
 	start := min(m.modalScroll, max(0, len(bodyLines)-limit))
 	end := min(len(bodyLines), start+limit)
 	lines := []string{surface(accentStyle.Render(title), inner, ColorRaised), ""}
 	for _, line := range bodyLines[start:end] {
-		lines = append(lines, fit(line, inner))
+		if styled {
+			lines = append(lines, surface(line, inner, ColorPanel))
+		} else {
+			lines = append(lines, fit(line, inner))
+		}
 	}
 	lines = append(lines, "", dimStyle.Render(fit(safeText(help), inner)))
 	lines = append(lines, outlinedButtons(buttons, inner)...)

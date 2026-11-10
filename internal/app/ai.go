@@ -13,7 +13,52 @@ import (
 	"github.com/Rafael-Albernaz-dev/vorq/internal/suggest"
 )
 
-const MaxAIDiffBytes = 48 * 1024
+// AI limits (VORQ-014): fixed, shared by CLI and TUI. Inputs are never
+// truncated: anything above a limit is refused before sending.
+const (
+	MaxAIDiffBytes    = 256 * 1024 // staged diff for message suggestions
+	AISuggestTimeout  = 3 * time.Minute
+	AIModelsTimeout   = 15 * time.Second
+	AnalysisTimeout   = 5 * time.Minute
+	MaxReviewFindings = 100
+)
+
+// AIProviders are the supported subscription clients, in menu order.
+var AIProviders = []string{"codex", "gemini", "claude"}
+
+// ClaudeModelAliases always resolve to the latest model of each family.
+var ClaudeModelAliases = []string{"fable", "opus", "sonnet", "haiku"}
+
+// validateProvider is the single provider/model rule for every AI use case.
+func validateProvider(provider, model string) error {
+	known := false
+	for _, p := range AIProviders {
+		known = known || p == provider
+	}
+	if !known {
+		return fmt.Errorf("choose codex, gemini or claude")
+	}
+	if model == "" {
+		return nil
+	}
+	valid := aiModelPattern.MatchString(model)
+	switch provider {
+	case "codex":
+		valid = valid && strings.HasPrefix(model, "gpt-")
+	case "gemini":
+		valid = valid && strings.HasPrefix(model, "gemini-")
+	case "claude":
+		alias := false
+		for _, a := range ClaudeModelAliases {
+			alias = alias || a == model
+		}
+		valid = valid && (alias || strings.HasPrefix(model, "claude-"))
+	}
+	if !valid {
+		return fmt.Errorf("invalid model %q for %s", model, provider)
+	}
+	return nil
+}
 
 var aiSubjectPattern = regexp.MustCompile(`^(feat|fix|chore|refactor|docs|test|style|perf)(\([^():\r\n]+\))?!?: .+$`)
 var aiModelPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,99}$`)
@@ -29,8 +74,8 @@ type AISuggestionService interface {
 }
 
 func (a *App) ListAIModels(ctx context.Context, provider string) ([]domain.AIModel, error) {
-	if provider != "codex" && provider != "gemini" {
-		return nil, fmt.Errorf("choose codex or gemini")
+	if err := validateProvider(provider, ""); err != nil {
+		return nil, err
 	}
 	lister, ok := a.ai.(interface {
 		ListModels(context.Context, string) ([]domain.AIModel, error)
@@ -38,7 +83,7 @@ func (a *App) ListAIModels(ctx context.Context, provider string) ([]domain.AIMod
 	if !ok {
 		return nil, fmt.Errorf("model catalog unavailable")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, AIModelsTimeout)
 	defer cancel()
 	return lister.ListModels(ctx, provider)
 }
@@ -47,9 +92,6 @@ func (a *App) SetAIProvider(provider AIProvider) { a.ai = provider }
 
 // SuggestCommitAI never stages, writes a commit, or silently changes providers.
 func (a *App) SuggestCommitAI(ctx context.Context, dir, provider string, models ...string) (*domain.AIProposal, error) {
-	if provider != "codex" && provider != "gemini" {
-		return nil, fmt.Errorf("choose codex or gemini")
-	}
 	if a.ai == nil {
 		return nil, fmt.Errorf("AI provider unavailable")
 	}
@@ -57,10 +99,10 @@ func (a *App) SuggestCommitAI(ctx context.Context, dir, provider string, models 
 	if len(models) > 0 {
 		model = models[0]
 	}
-	if model != "" && (!aiModelPattern.MatchString(model) || provider == "gemini" && !strings.HasPrefix(model, "gemini-") || provider == "codex" && !strings.HasPrefix(model, "gpt-")) {
-		return nil, fmt.Errorf("invalid model for %s", provider)
+	if err := validateProvider(provider, model); err != nil {
+		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, AISuggestTimeout)
 	defer cancel()
 	cs, err := a.GetCommitChanges(ctx, dir)
 	if err != nil {

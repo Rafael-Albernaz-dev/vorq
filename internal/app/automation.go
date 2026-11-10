@@ -16,7 +16,8 @@ import (
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 )
 
-const AnalysisLimit = 512 * 1024
+// AnalysisLimit bounds the JSON payload sent for review/plan (VORQ-014).
+const AnalysisLimit = 2 * 1024 * 1024
 
 type AutomationRepository interface {
 	CaptureSnapshot(context.Context, string) (*domain.ChangeSnapshot, error)
@@ -42,11 +43,8 @@ func (a *App) automation() (AutomationRepository, error) {
 	return r, nil
 }
 func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (*domain.ChangeSnapshot, json.RawMessage, error) {
-	if provider != "codex" && provider != "gemini" {
-		return nil, nil, fmt.Errorf("choose a provider")
-	}
-	if model != "" && (!aiModelPattern.MatchString(model) || provider == "codex" && !strings.HasPrefix(model, "gpt-") || provider == "gemini" && !strings.HasPrefix(model, "gemini-")) {
-		return nil, nil, fmt.Errorf("invalid provider model")
+	if err := validateProvider(provider, model); err != nil {
+		return nil, nil, err
 	}
 	r, err := a.automation()
 	if err != nil {
@@ -58,7 +56,7 @@ func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (
 	if !ok {
 		return nil, nil, fmt.Errorf("analysis provider unavailable")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, AnalysisTimeout)
 	defer cancel()
 	snapshot, err := r.CaptureSnapshot(ctx, dir)
 	if err != nil {
@@ -78,7 +76,7 @@ func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (
 		return nil, nil, err
 	}
 	if len(data) > AnalysisLimit {
-		return nil, nil, fmt.Errorf("analysis exceeds 512 KiB; select a smaller change set (nothing sent)")
+		return nil, nil, fmt.Errorf("analysis exceeds %d MiB; select a smaller change set (nothing sent)", AnalysisLimit/(1024*1024))
 	}
 	result, err := p.Analyze(ctx, domain.AnalysisRequest{Provider: provider, Model: model, Task: task, Payload: string(data)})
 	if err != nil {
@@ -88,6 +86,42 @@ func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (
 		return nil, nil, err
 	}
 	return snapshot, result, nil
+}
+
+// fileResolver maps a provider's file reference to a snapshot ID. Models are
+// asked for IDs but sometimes answer with the path; a path naming exactly one
+// eligible file is accepted as that file's ID. Anything else is returned
+// unchanged and later rejected by validation.
+func fileResolver(s *domain.ChangeSnapshot) func(string) string {
+	byPath := map[string]string{}
+	ambiguous := map[string]bool{}
+	ids := map[string]bool{}
+	for _, f := range s.Files {
+		if f.Excluded != "" {
+			continue
+		}
+		ids[f.ID] = true
+		for _, p := range []string{f.Path, f.OldPath} {
+			if p == "" {
+				continue
+			}
+			if other, ok := byPath[p]; ok && other != f.ID {
+				ambiguous[p] = true
+			}
+			byPath[p] = f.ID
+		}
+	}
+	return func(ref string) string {
+		ref = strings.TrimSpace(ref)
+		if ids[ref] {
+			return ref
+		}
+		clean := strings.TrimPrefix(ref, "./")
+		if id, ok := byPath[clean]; ok && !ambiguous[clean] {
+			return id
+		}
+		return ref
+	}
 }
 
 func (a *App) EditCommitPlan(ctx context.Context, dir string, original *domain.CommitPlan, edit domain.PlanEdit) (*domain.CommitPlan, error) {
@@ -170,14 +204,25 @@ func (a *App) ReviewDiffAI(ctx context.Context, dir, provider, model string) (*d
 			known[f.ID] = true
 		}
 	}
-	if len(review.Summary) > 8192 || len(review.Findings) > 100 {
-		return nil, fmt.Errorf("review output exceeds limits")
+	if len(review.Summary) > 16384 {
+		return nil, fmt.Errorf("review summary exceeds limits")
 	}
+	// Keep every grounded finding; drop (and count) invalid ones instead of
+	// discarding the whole review because of a single malformed entry.
+	var kept []domain.ReviewFinding
+	resolve := fileResolver(snapshot)
 	for _, f := range review.Findings {
-		if !known[f.FileID] || f.Evidence == "" || len(f.Message) > 8192 || len(f.Evidence) > 8192 || f.Severity != "info" && f.Severity != "warning" && f.Severity != "error" {
-			return nil, fmt.Errorf("review contains invalid or ungrounded findings")
+		f.FileID = resolve(f.FileID)
+		valid := known[f.FileID] && strings.TrimSpace(f.Evidence) != "" && strings.TrimSpace(f.Message) != "" &&
+			len(f.Message) <= 8192 && len(f.Evidence) <= 8192 && len(f.Suggestion) <= 8192 &&
+			(f.Severity == "info" || f.Severity == "warning" || f.Severity == "error")
+		if valid && len(kept) < MaxReviewFindings {
+			kept = append(kept, f)
+		} else {
+			review.Dropped++
 		}
 	}
+	review.Findings = kept
 	review.Snapshot = *snapshot
 	return &review, nil
 }
@@ -191,6 +236,12 @@ func (a *App) PlanCommitsAI(ctx context.Context, dir, provider, model string) (*
 	}
 	if err = json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("invalid plan JSON")
+	}
+	resolve := fileResolver(snapshot)
+	for i := range response.Commits {
+		for j, ref := range response.Commits[i].Files {
+			response.Commits[i].Files[j] = resolve(ref)
+		}
 	}
 	plan := &domain.CommitPlan{Snapshot: *snapshot, Commits: response.Commits, ExpectedHead: snapshot.Head, ExpectedIndex: snapshot.Index}
 	if err = a.ValidateCommitPlan(ctx, dir, plan); err != nil {

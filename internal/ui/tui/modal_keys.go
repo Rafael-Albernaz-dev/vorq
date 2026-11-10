@@ -143,7 +143,7 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			return m.push()
 		}
 	case "suggest":
-		if s == "c" || s == "g" {
+		if _, ok := providerKeys[s]; ok {
 			return m.chooseAI(s)
 		}
 		if m.aiTask != "" && m.aiTask != "suggest" {
