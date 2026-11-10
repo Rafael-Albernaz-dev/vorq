@@ -9,6 +9,23 @@ import (
 
 func barSeparator() string { return dimStyle.Foreground(ColorLine).Render("  |  ") }
 
+// refreshButton is the explicit workspace reload (VORQ-011): vorq never
+// re-reads on a timer, so this button and r are the way to see external edits.
+const refreshButton = "[↻ Atualizar]"
+
+// contextRight is the right segment of the context row, shared by rendering
+// and mouse hit testing so both always agree on positions.
+func (m *Model) contextRight() string {
+	right := "Carregando · ↑… ↓… · " + m.themeName()
+	if m.studio != nil {
+		right = m.contextBar(m.studio.Workspace.Branch, m.studio.Changes.Ahead, m.studio.Changes.Behind)
+	}
+	if m.stale {
+		right += " · DESATUALIZADO"
+	}
+	return right + barSeparator() + accentStyle.Bold(true).Render(refreshButton)
+}
+
 func (m *Model) contextBar(branch string, ahead, behind int) string {
 	syncStyle := dimStyle
 	if ahead > 0 {
@@ -17,12 +34,15 @@ func (m *Model) contextBar(branch string, ahead, behind int) string {
 	if behind > 0 {
 		syncStyle = yellowStyle
 	}
-	return strings.Join([]string{
+	parts := []string{
 		cyanStyle.Bold(true).Render(displayName(branch)),
 		syncStyle.Render(fmt.Sprintf("↑%d ↓%d", ahead, behind)),
-		accentStyle.Render(m.themeName()),
-		dimStyle.Render("ícones: ") + cyanStyle.Render(m.iconModeLabel()),
-	}, barSeparator())
+	}
+	// Narrow terminals keep branch, sync arrows and the refresh button visible.
+	if m.width >= 110 {
+		parts = append(parts, accentStyle.Render(m.themeName()), dimStyle.Render("ícones: ")+cyanStyle.Render(m.iconModeLabel()))
+	}
+	return strings.Join(parts, barSeparator())
 }
 
 func (m *Model) summaryBar() string {

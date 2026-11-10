@@ -272,7 +272,7 @@ func (v *viewerState) view(width, height int) string {
 	lines := make([]string, height)
 	for i := range lines {
 		line := ""
-		if v.loading && i == 0 {
+		if v.loading && i == 0 && len(v.lines) == 0 {
 			line = dimStyle.Render("Lendo arquivo…")
 		} else if i+v.offset < len(v.lines) {
 			line = ansi.Cut(v.lines[i+v.offset], v.column, v.column+width)

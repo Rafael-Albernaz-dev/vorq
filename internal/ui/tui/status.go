@@ -39,20 +39,7 @@ func (m *Model) renderView() string {
 		return m.workflowView()
 	}
 	title := m.repositoryHeader()
-	branch := "carregando"
-	ahead, behind := 0, 0
-	if m.studio != nil {
-		branch = m.studio.Workspace.Branch
-		ahead = m.studio.Changes.Ahead
-		behind = m.studio.Changes.Behind
-	}
-	contextRight := m.contextBar(branch, ahead, behind)
-	if m.studio == nil {
-		contextRight = "Carregando · ↑… ↓… · " + m.themeName()
-	}
-	if m.stale {
-		contextRight += " · DESATUALIZADO"
-	}
+	contextRight := m.contextRight()
 	pathWidth := max(1, m.width-ansi.StringWidth(contextRight)-3)
 	context := surface(" "+fit(dimStyle.Render(safeText(m.dir)), pathWidth)+" "+contextRight, m.width, ColorPanel)
 	summary := m.summaryBar()
@@ -366,7 +353,7 @@ func (m *Model) modalView() string {
 		buttons = "[Confirmar]  [Voltar]"
 	case "help":
 		title = "ATALHOS · MESA DE COMMIT"
-		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees · r: atualizar\nPainel direito: abas Commit/Git/PRs/Worktrees clicáveis\nSetas da branch: ↑ revisar push · ↓ revisar atualização ff-only\nb: nova branch · H: histórico · P: PRs · o: abrir GitHub\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
+		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees\nr ou [↻ Atualizar]: reler o workspace (sem atualização automática)\nPainel direito: abas Commit/Git/PRs/Worktrees clicáveis\nSetas da branch: ↑ revisar push · ↓ revisar atualização ff-only\nb: nova branch · H: histórico · P: PRs · o: abrir GitHub\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
 		help = "Esc fecha · PgUp/PgDown ou roda rola"
 		buttons = "[Voltar]"
 	case "suggest":

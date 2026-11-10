@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"time"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 )
@@ -14,8 +13,8 @@ type operationsState struct {
 	readCancel, fileCancel, dialogCancel context.CancelFunc
 	loadID, fileID, dialogID             uint64
 	loading, mutating, stale             bool
+	reloadInventory                      bool
 	busy, notice                         string
-	lastRefresh                          time.Time
 }
 type navigationState struct {
 	rightTab                                                  string
@@ -26,6 +25,7 @@ type navigationState struct {
 	rows                                                      []treeRow
 	expanded                                                  map[string]bool
 	positions                                                 map[string]treePosition
+	pendingSelection                                          treePosition
 	selected, treeOffset, inventoryCount                      int
 	viewer                                                    viewerState
 }

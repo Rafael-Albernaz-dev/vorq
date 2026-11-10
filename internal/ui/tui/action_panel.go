@@ -163,18 +163,22 @@ func (m *Model) contextArrowClick(x, y int) (bool, tea.Cmd) {
 	if m.isWide {
 		contextY = 2
 	}
-	if y != contextY || m.studio == nil {
+	if y != contextY {
 		return false, nil
 	}
 	// Only the final context segment owns these hit areas. A workspace path
 	// containing arrow text cannot become a transport control.
+	right := m.contextRight()
+	start := max(1, m.width-ansi.StringWidth(right)-3) + 2
+	if mouseLabelHit(right, refreshButton, x-start) {
+		m.commitEditing = false
+		return true, m.reloadWorkspace()
+	}
+	if m.studio == nil {
+		return false, nil
+	}
 	branch := m.studio.Workspace.Branch
 	a, b := m.studio.Changes.Ahead, m.studio.Changes.Behind
-	right := m.contextBar(branch, a, b)
-	if m.stale {
-		right += " · DESATUALIZADO"
-	}
-	start := max(1, m.width-ansi.StringWidth(right)-3) + 2
 	syncText := fmt.Sprintf("↑%d ↓%d", a, b)
 	syncStart := start + ansi.StringWidth(displayName(branch)) + ansi.StringWidth(barSeparator())
 	for _, label := range []string{fmt.Sprintf("↑%d", a), fmt.Sprintf("↓%d", b)} {

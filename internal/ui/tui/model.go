@@ -104,10 +104,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isWide = m.width >= 140 && m.height >= 36
 		m.keepTreeVisible()
 	case tickMsg:
+		// The tick only animates the spinner. Workspace reads happen on explicit
+		// request (Atualizar/r) or after vorq's own actions, never by timer, so
+		// selection, scroll and the open file are never reset behind the user.
 		m.frame++
-		if !m.loading && !m.viewer.loading && !m.mutating && m.busy == "" && m.modal == "" && m.screen == "" && time.Since(m.lastRefresh) > 5*time.Second {
-			return m, tea.Batch(m.refresh(), tick())
-		}
 		return m, tick()
 	case workspaceMsg:
 		if msg.id != m.loadID {
@@ -127,8 +127,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.loading = false
-		m.lastRefresh = time.Now()
 		if msg.err != nil {
+			m.reloadInventory = false
 			m.stale = true
 			m.notice = "Snapshot desatualizado · r para tentar novamente: " + msg.err.Error()
 			return m, nil

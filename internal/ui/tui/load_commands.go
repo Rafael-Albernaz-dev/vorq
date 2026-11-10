@@ -8,6 +8,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// refresh re-reads the workspace after vorq's own actions. Loaded inventory of
+// expanded ignored directories is carried over (ignored data does not change
+// through stage/commit/push); reloadWorkspace also re-reads it.
 func (m *Model) refresh() tea.Cmd {
 	if m.readCancel != nil {
 		m.readCancel()
@@ -26,6 +29,16 @@ func (m *Model) refresh() tea.Cmd {
 		tree, err := core.GetWorkspaceTree(ctx, dir)
 		return treeMsg{id, tree, err}
 	}
+}
+
+// reloadWorkspace is the explicit Atualizar button / r key.
+func (m *Model) reloadWorkspace() tea.Cmd {
+	if m.loading {
+		return nil
+	}
+	m.reloadInventory = true
+	m.notice = "Atualizando workspace…"
+	return m.refresh()
 }
 
 func (m *Model) loadSelected() tea.Cmd {

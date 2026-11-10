@@ -109,17 +109,17 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			delta = -3
 		}
 		switch pane {
+		// The wheel scrolls anywhere over a pane (tabs, header and footer
+		// included); it only moves the list, never the selection.
 		case "tree":
-			if y >= 4 && y < 4+m.bodyHeight() && (msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown) {
+			if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
 				m.treeOffset = min(max(0, m.treeOffset+delta), max(0, len(m.rows)-m.bodyHeight()))
 			}
 		case "viewer":
-			if y >= 4 && y < m.panelHeight()-1 {
-				if msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight {
-					m.viewer.column = max(0, m.viewer.column+delta)
-				} else {
-					m.viewer.scroll(delta, m.bodyHeight())
-				}
+			if msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight {
+				m.viewer.column = max(0, m.viewer.column+delta)
+			} else {
+				m.viewer.scroll(delta, m.bodyHeight())
 			}
 		case "commit":
 			if m.activeRightTab() != "commit" {

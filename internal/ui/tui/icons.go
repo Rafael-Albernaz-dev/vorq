@@ -41,6 +41,10 @@ func (m *Model) iconModeLabel() string {
 	return map[IconMode]string{IconModeEmoji: "Emoji", IconModeText: "Texto"}[m.currentIconMode()]
 }
 
+// nodeIcon returns only single-code-point emoji with default emoji
+// presentation. Sequences with the VS16 selector (e.g. ⚛️, ⚙️, 🖼️) are measured
+// as 2 cells by the layout but drawn with a different width by many terminals,
+// which shifts the whole row and the neighbouring pane border.
 func nodeIcon(node *domain.TreeNode, open bool, mode IconMode) string {
 	if node.IsDir {
 		if mode == IconModeText {
@@ -63,7 +67,7 @@ func nodeIcon(node *domain.TreeNode, open bool, mode IconMode) string {
 	case "[JS]":
 		return "🟨"
 	case "[JSX]", "[TSX]":
-		return "⚛️"
+		return "🔵"
 	case "[PY]":
 		return "🐍"
 	case "[HTML]":
@@ -75,13 +79,13 @@ func nodeIcon(node *domain.TreeNode, open bool, mode IconMode) string {
 	case "[JSON]":
 		return "📋"
 	case "[ENV]", "[YML]":
-		return "⚙️"
+		return "🔧"
 	case "[GIT]":
 		return "🔀"
 	case "[MOD]":
 		return "📦"
 	case "[IMG]":
-		return "🖼️"
+		return "📷"
 	case "[SH]":
 		return "📜"
 	default:

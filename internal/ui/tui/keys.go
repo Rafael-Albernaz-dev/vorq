@@ -109,8 +109,8 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	if m.busy != "" {
 		return nil
 	}
-	if s == "r" && !m.loading {
-		return m.refresh()
+	if s == "r" {
+		return m.reloadWorkspace()
 	}
 	if s == "b" {
 		m.openBranchForm()
@@ -162,7 +162,7 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if s == "s" && !m.loading {
+	if s == "s" {
 		return m.stage()
 	}
 	if s == "A" {
@@ -207,9 +207,8 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if m.loading {
-		return nil
-	}
+	// Navigation works on the current snapshot even while a read is in
+	// flight; the arriving snapshot restores the selection by path.
 	switch s {
 	case "up", "k":
 		m.moveTree(-1)
