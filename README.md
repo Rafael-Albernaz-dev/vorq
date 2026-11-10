@@ -100,6 +100,7 @@ Discard opens a confirmation dialog with the exact path and impact. New staged f
 | `Shift + Tab` | Global | Switch focus between **File Tree** and **Viewer** |
 | `↑` / `↓` or `j` / `k` | Viewer | Smooth scroll line by line |
 | `PgUp` / `PgDown` | Viewer | Scroll page by page |
+| `f` / **Tela cheia [ ]** (right end of the summary row) | Viewer | Open the current file/diff in full screen (no re-read; scroll kept). Inside: `z` toggles line wrap (default: horizontal scroll), `1`/`2`/`Tab` switch tabs, `s` stage, `x` discard (confirmed); `Esc`, `f`, `q` or **Tela cheia [x]** return |
 | `s` | Tree / Viewer | **Stage / Unstage** selected file asynchronously |
 | `A` / `U` | Tree / Viewer | **Stage all / Unstage all**, preserving working files on unstage |
 | `x` / `d` | Tree / Viewer | Review **Discard**; click `[Descartar]` in the viewer for the same dialog |

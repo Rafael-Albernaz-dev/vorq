@@ -38,6 +38,13 @@ func (m *Model) renderView() string {
 	if m.screen != "" {
 		return m.workflowView()
 	}
+	if m.fullscreen {
+		base := m.fullscreenView()
+		if m.modal != "" {
+			return overlay(base, m.modalView(), m.width, m.height)
+		}
+		return base
+	}
 	title := m.repositoryHeader()
 	contextRight := m.contextRight()
 	pathWidth := max(1, m.width-ansi.StringWidth(contextRight)-3)
@@ -46,10 +53,11 @@ func (m *Model) renderView() string {
 	if m.studio == nil {
 		summary = " … arquivos alterados  │  … no stage  … fora  … novos  … conflitos"
 	}
-	top := []string{title, context, surface(summary, m.width, ColorBg)}
+	summaryRow := m.summaryRow(summary)
+	top := []string{title, context, summaryRow}
 	var body string
 	if m.isWide {
-		top = []string{title, surface(paneRule(m.width), m.width, ColorRaised), context, surface(paneRule(m.width), m.width, ColorPanel), surface(summary, m.width, ColorBg), surface(paneRule(m.width), m.width, ColorBg)}
+		top = []string{title, surface(paneRule(m.width), m.width, ColorRaised), context, surface(paneRule(m.width), m.width, ColorPanel), summaryRow, surface(paneRule(m.width), m.width, ColorBg)}
 		left, center, right := m.paneWidths()
 		separator := strings.TrimSuffix(strings.Repeat(lipgloss.NewStyle().Foreground(ColorLine).Background(ColorPanel).Render("│")+"\n", m.panelHeight()), "\n")
 		body = lipgloss.JoinHorizontal(lipgloss.Top, m.treePane(left), separator, m.viewerPane(center), separator, m.commitPane(right))
@@ -160,32 +168,7 @@ func (m *Model) viewerPane(width int) string {
 	if m.viewer.path != "" && m.viewer.directory == nil {
 		context = redStyle.Bold(true).Render("[Descartar]") + " " + context
 	}
-	if m.viewer.directory != nil {
-		comparison = "resumo da pasta"
-	}
-	footer := fmt.Sprintf(" +%d −%d linhas · %s · %d/%d", m.viewer.added, m.viewer.deleted, comparison, min(len(m.viewer.lines), m.viewer.offset+1), len(m.viewer.lines))
-	if m.viewerTab == "arquivo" && m.viewer.content != nil {
-		c := m.viewer.content
-		if c.Notice != "" {
-			footer = " " + safeText(c.Notice)
-		} else {
-			count := 0
-			if c.Text != "" {
-				count = strings.Count(strings.TrimSuffix(c.Text, "\n"), "\n") + 1
-			}
-			footer = fmt.Sprintf(" %d linhas · somente leitura", count)
-		}
-	}
-	if m.viewer.directory != nil {
-		footer = fmt.Sprintf(" %d caminhos · pasta", m.viewer.directory.FileCount())
-	}
-	if m.viewer.combined {
-		footer = " Diff de conflito · marcadores dos pais preservados"
-	}
-	if m.viewer.binary {
-		footer = " Binário · sem preview de texto"
-	}
-	return strings.Join([]string{tabs, surface(" "+context, width, ColorBg), m.viewer.view(width, m.bodyHeight()), surface(dimStyle.Render(footer), width, ColorPanel)}, "\n")
+	return strings.Join([]string{tabs, surface(" "+context, width, ColorBg), m.viewer.view(width, m.bodyHeight()), surface(dimStyle.Render(m.viewerFooter()), width, ColorPanel)}, "\n")
 }
 
 func fieldText(value string, cursor, width, height int, editing bool) []string {
@@ -353,7 +336,7 @@ func (m *Model) modalView() string {
 		buttons = "[Confirmar]  [Voltar]"
 	case "help":
 		title = "ATALHOS · MESA DE COMMIT"
-		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees\nr ou [↻ Atualizar]: reler o workspace (sem atualização automática)\nPainel direito: abas Commit/Git/PRs/Worktrees clicáveis\nSetas da branch: ↑ revisar push · ↓ revisar atualização ff-only\nb: nova branch · H: histórico · P: PRs · o: abrir GitHub\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
+		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees\nf ou [Tela cheia]: arquivo/diff em tela cheia (z quebra linhas, Esc sai)\nr ou [↻ Atualizar]: reler o workspace (sem atualização automática)\nPainel direito: abas Commit/Git/PRs/Worktrees clicáveis\nSetas da branch: ↑ revisar push · ↓ revisar atualização ff-only\nb: nova branch · H: histórico · P: PRs · o: abrir GitHub\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
 		help = "Esc fecha · PgUp/PgDown ou roda rola"
 		buttons = "[Voltar]"
 	case "suggest":
@@ -562,3 +545,34 @@ func outlinedButtons(buttons string, width int) []string {
 }
 
 func (m *Model) modalBodyHeight() int { return max(1, m.height-11) }
+
+// viewerFooter is shared by the pane and the full-screen viewer.
+func (m *Model) viewerFooter() string {
+	comparison := map[string]string{"trabalho": "índice → trabalho", "stage": "HEAD → índice", "arquivo": "somente leitura"}[m.viewerTab]
+	if m.viewer.directory != nil {
+		comparison = "resumo da pasta"
+	}
+	footer := fmt.Sprintf(" +%d −%d linhas · %s · %d/%d", m.viewer.added, m.viewer.deleted, comparison, min(len(m.viewer.lines), m.viewer.offset+1), len(m.viewer.lines))
+	if m.viewerTab == "arquivo" && m.viewer.content != nil {
+		c := m.viewer.content
+		if c.Notice != "" {
+			footer = " " + safeText(c.Notice)
+		} else {
+			count := 0
+			if c.Text != "" {
+				count = strings.Count(strings.TrimSuffix(c.Text, "\n"), "\n") + 1
+			}
+			footer = fmt.Sprintf(" %d linhas · somente leitura", count)
+		}
+	}
+	if m.viewer.directory != nil {
+		footer = fmt.Sprintf(" %d caminhos · pasta", m.viewer.directory.FileCount())
+	}
+	if m.viewer.combined {
+		footer = " Diff de conflito · marcadores dos pais preservados"
+	}
+	if m.viewer.binary {
+		footer = " Binário · sem preview de texto"
+	}
+	return footer
+}

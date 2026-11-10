@@ -50,6 +50,12 @@ func (m *Model) UpdateTree(tree *domain.WorkspaceTree) tea.Cmd {
 		// re-anchoring the viewport on the selection.
 		m.treeOffset = min(max(0, offset), max(0, len(m.rows)-m.bodyHeight()))
 	}
+	if m.fullscreen {
+		if node := m.selectedNode(); node == nil || node.Path != m.fullscreenPath {
+			m.exitFullscreen()
+			m.notice = "O arquivo saiu da lista; tela cheia encerrada."
+		}
+	}
 	commands := []tea.Cmd{m.loadSelected()}
 	var walk func(*domain.TreeNode)
 	walk = func(n *domain.TreeNode) {
@@ -103,6 +109,7 @@ func (m *Model) restoreWorkspaceContext(dir string) {
 	m.expanded, m.positions = c.expanded, c.positions
 	m.selected, m.treeOffset, m.viewer = c.selected, c.treeOffset, c.viewer
 	m.rows = nil
+	m.fullscreen, m.fullscreenPath = false, ""
 	m.draftRevision++
 	m.commitEditing = false
 	m.modal = ""

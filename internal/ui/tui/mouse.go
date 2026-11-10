@@ -61,6 +61,9 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.screen != "" {
 		return m, m.workflowMouse(msg)
 	}
+	if m.fullscreen {
+		return m, m.fullscreenMouse(msg)
+	}
 	if msg.Button == tea.MouseButtonRight {
 		pane, _, y, _ := m.mousePane(msg.X, msg.Y)
 		index := m.treeOffset + y - 4
@@ -79,6 +82,13 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.Y == 0 && msg.Button == tea.MouseButtonLeft {
 		return m, m.openRepository()
+	}
+	if msg.Button == tea.MouseButtonLeft && msg.Y == m.summaryRowY() {
+		start := m.width - ansi.StringWidth(fullscreenOff) - 1
+		if msg.X >= start {
+			m.enterFullscreen()
+			return m, nil
+		}
 	}
 	wheel := msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown || msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight
 	if msg.Button != tea.MouseButtonLeft && !wheel {
@@ -437,6 +447,7 @@ func (m *Model) mouseFooter(x int) tea.Cmd {
 		{"U: Unstage tudo", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'U'}}},
 		{"x Descartar", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}},
 		{"s Stage", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}},
+		{"f Tela cheia", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}},
 		{"c Mensagem", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}},
 		{"c Commit", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}},
 		{"p Push", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}},

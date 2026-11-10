@@ -13,7 +13,7 @@ type operationsState struct {
 	readCancel, fileCancel, dialogCancel context.CancelFunc
 	loadID, fileID, dialogID             uint64
 	loading, mutating, stale             bool
-	reloadInventory                      bool
+	reloadInventory, explicitReload      bool
 	busy, notice                         string
 }
 type navigationState struct {
@@ -26,6 +26,8 @@ type navigationState struct {
 	expanded                                                  map[string]bool
 	positions                                                 map[string]treePosition
 	pendingSelection                                          treePosition
+	fullscreen, viewerWrap                                    bool
+	fullscreenPath                                            string
 	selected, treeOffset, inventoryCount                      int
 	viewer                                                    viewerState
 }
