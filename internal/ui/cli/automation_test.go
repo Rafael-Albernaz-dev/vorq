@@ -12,6 +12,7 @@ import (
 
 type cliAutomationStub struct {
 	app.AutomationService
+	app.StageAdviceService
 	executions int
 	plan       *domain.CommitPlan
 }

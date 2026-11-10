@@ -45,8 +45,12 @@ func printPlan(w io.Writer, p *domain.CommitPlan, diff bool) {
 		fmt.Fprintln(w, "Stopped:", terminalText(p.Error))
 	}
 }
-func newAICmd(core app.AutomationService) *cobra.Command {
-	root := &cobra.Command{Use: "ai", Short: "Review changes and organize approved whole-file commits"}
+func newAICmd(core interface {
+	app.AutomationService
+	app.StageAdviceService
+}) *cobra.Command {
+	root := &cobra.Command{Use: "ai", Short: "Review changes, prepare the next commit and organize approved whole-file commits"}
+	root.AddCommand(newStageAdviceCmd(core))
 	for _, task := range []string{"review", "plan"} {
 		task := task
 		var provider, model string
@@ -223,6 +227,102 @@ func printReview(out io.Writer, r *domain.DiffReview) {
 		fmt.Fprintln(out, titleStyle.Render("NOT ANALYSED"))
 		for _, f := range excluded {
 			fmt.Fprintf(out, "  • %s — %s\n", terminalText(f.Path), terminalText(f.Excluded))
+		}
+	}
+}
+
+// newStageAdviceCmd: `vorq ai stage` (VORQ-015). Without --apply it only
+// shows the advice; with --apply the stage becomes exactly the advice after
+// confirmation (or --yes). Working files are never modified.
+func newStageAdviceCmd(core app.StageAdviceService) *cobra.Command {
+	var provider, model string
+	var apply, yes, asJSON bool
+	cmd := &cobra.Command{Use: "stage", Short: "AI advice on what to stage for the next commit (uses tracked context docs); --apply updates only the index", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		out := cmd.OutOrStdout()
+		fmt.Fprintln(cmd.ErrOrStderr(), "Sending eligible working changes and tracked context documents (README, CONTRIBUTING, docs, templates) to "+provider+"; ignored/private files are never sent.")
+		advice, err := core.StageAdviceAI(ctx, ".", provider, model)
+		if err != nil {
+			return err
+		}
+		if asJSON && !apply {
+			return json.NewEncoder(out).Encode(advice)
+		}
+		printStageAdvice(out, advice)
+		if !apply {
+			fmt.Fprintln(out, "\n"+subtleStyle.Render("Nothing changed. Run with --apply to make the stage match this advice."))
+			return nil
+		}
+		if len(advice.Stage) == 0 {
+			return fmt.Errorf("the advice recommends nothing to stage; nothing applied")
+		}
+		if !yes {
+			fmt.Fprint(out, "\nMake the stage exactly match this advice (index only, files untouched)? [y/N]: ")
+			line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+			if err != nil || strings.ToLower(strings.TrimSpace(line)) != "y" {
+				fmt.Fprintln(out, subtleStyle.Render("Cancelled. Nothing applied."))
+				return nil
+			}
+		}
+		if err = core.ApplyStageAdvice(ctx, ".", advice); err != nil {
+			return err
+		}
+		fmt.Fprintln(out, successStyle.Render("✓ Stage now matches the advice.")+" Review with `vorq status`, then commit (no commit was created).")
+		return nil
+	}}
+	cmd.Flags().StringVar(&provider, "provider", "codex", "codex, gemini (Antigravity) or claude (Claude Code)")
+	cmd.Flags().StringVar(&model, "model", "", "Official CLI model ID")
+	cmd.Flags().BoolVar(&apply, "apply", false, "Make the stage exactly match the advice after confirmation")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "With --apply, skip the confirmation prompt")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "Print the structured advice (includes snapshot content)")
+	return cmd
+}
+
+func printStageAdvice(out io.Writer, a *domain.StageAdvice) {
+	paths := map[string]string{}
+	for _, f := range a.Snapshot.Files {
+		paths[f.ID] = f.Path
+	}
+	indent := func(text, prefix string) {
+		for _, line := range strings.Split(strings.TrimSpace(terminalText(text)), "\n") {
+			if line != "" {
+				fmt.Fprintln(out, prefix+line)
+			}
+		}
+	}
+	rule := subtleStyle.Render(strings.Repeat("─", 72))
+	fmt.Fprintln(out, titleStyle.Render("SUMMARY"))
+	indent(a.Summary, "  ")
+	if len(a.Context) > 0 {
+		fmt.Fprintln(out, subtleStyle.Render("  Context read: "+terminalText(strings.Join(a.Context, ", "))))
+	}
+	fmt.Fprintln(out, "\n"+rule+"\n"+successStyle.Render("STAGE FOR THE NEXT COMMIT"))
+	for _, item := range a.Stage {
+		fmt.Fprintln(out, "  + "+branchStyle.Render(terminalText(paths[item.FileID])))
+		indent(item.Reason, "      ")
+	}
+	fmt.Fprintln(out, "\n"+rule+"\n"+warnStyle.Render("KEEP OUT"))
+	for _, item := range a.Hold {
+		fmt.Fprintln(out, "  − "+branchStyle.Render(terminalText(paths[item.FileID])))
+		indent(item.Reason, "      ")
+		if item.Risk != "" {
+			indent("Risk: "+item.Risk, "      ")
+		}
+	}
+	if a.Subject != "" {
+		fmt.Fprintln(out, "\n"+rule+"\n"+titleStyle.Render("SUGGESTED MESSAGE"))
+		indent(a.Subject, "  ")
+		indent(a.Body, "  ")
+	}
+	if len(a.Changes) > 0 {
+		fmt.Fprintln(out, "\n"+rule+"\n"+titleStyle.Render("INDEX CHANGES ON --apply"))
+		for _, c := range a.Changes {
+			note := ""
+			if c.Partial {
+				note = " (was partially staged)"
+			}
+			fmt.Fprintf(out, "  %-8s %s%s\n", c.Action, terminalText(c.Path), note)
 		}
 	}
 }

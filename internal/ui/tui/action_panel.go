@@ -49,7 +49,7 @@ func (m *Model) actionTabs(width int) string {
 func (m *Model) panelActions() []panelAction {
 	switch m.activeRightTab() {
 	case "ai":
-		return []panelAction{{"Provedor e modelo", "Escolher Codex, Gemini ou Claude Code.", "ai-configure"}, {"Sugerir mensagem", "Analisar somente o stage.", "ai-suggest"}, {"Revisar diff", "Revisão das mudanças elegíveis.", "ai-review"}, {"Organizar commits", "Propor grupos e mensagens.", "ai-plan"}, {"Revisar plano", "Editar, aprovar ou retomar.", "ai-saved"}}
+		return []panelAction{{"Provedor e modelo", "Escolher Codex, Gemini ou Claude Code.", "ai-configure"}, {"Sugerir mensagem", "Analisar somente o stage.", "ai-suggest"}, {"Preparar próximo commit", "IA indica o que pôr no stage.", "ai-stage"}, {"Revisar diff", "Revisão das mudanças elegíveis.", "ai-review"}, {"Organizar commits", "Propor grupos e mensagens.", "ai-plan"}, {"Revisar plano", "Editar, aprovar ou retomar.", "ai-saved"}}
 	case "git":
 		return []panelAction{{"Nova branch", "Criar e entrar em uma branch.", "b"}, {"Trocar branch", "Escolher uma branch local existente.", "switch-branch"}, {"Histórico de commits", "Ver branches, merges e diffs.", "H"}, {"Revisar push ↑", "Conferir destino antes de publicar.", "p"}, {"Atualizar branch ↓", "Buscar e aplicar somente fast-forward.", "pull"}}
 	case "prs":
@@ -107,6 +107,8 @@ func (m *Model) runPanelAction(index int) tea.Cmd {
 		return m.openAIAction("suggest")
 	case "ai-review":
 		return m.openAIAction("review")
+	case "ai-stage":
+		return m.openAIAction("stage")
 	case "ai-plan":
 		return m.openAIAction("plan")
 	case "ai-saved":

@@ -146,7 +146,7 @@ func (m *Model) generateAI() tea.Cmd {
 	m.aiProposal = nil
 	m.busy = "Analisando staged com " + provider + "…"
 	ctx, cancel := m.beginDialog(app.AISuggestTimeout + uiMargin)
-	if m.aiTask == "review" || m.aiTask == "plan" {
+	if isWorkingAnalysis(m.aiTask) {
 		cancel()
 		return m.generateAutomation()
 	}

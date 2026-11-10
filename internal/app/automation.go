@@ -43,6 +43,12 @@ func (a *App) automation() (AutomationRepository, error) {
 	return r, nil
 }
 func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (*domain.ChangeSnapshot, json.RawMessage, error) {
+	return a.analysisWithContext(ctx, dir, provider, model, task, nil)
+}
+
+// analysisWithContext sends the eligible snapshot and, when given, tracked
+// repository documents as {"context_documents":[...],"files":[...]}.
+func (a *App) analysisWithContext(ctx context.Context, dir, provider, model, task string, docs []domain.ContextDocument) (*domain.ChangeSnapshot, json.RawMessage, error) {
 	if err := validateProvider(provider, model); err != nil {
 		return nil, nil, err
 	}
@@ -71,7 +77,12 @@ func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (
 	if len(payload) == 0 {
 		return nil, nil, fmt.Errorf("no eligible changes; ignored/binary/special/large files require manual handling")
 	}
-	data, err := json.Marshal(payload)
+	var data []byte
+	if docs != nil {
+		data, err = json.Marshal(map[string]any{"context_documents": docs, "files": payload})
+	} else {
+		data, err = json.Marshal(payload)
+	}
 	if err != nil {
 		return nil, nil, err
 	}

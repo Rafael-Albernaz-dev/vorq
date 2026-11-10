@@ -59,3 +59,38 @@ type PlanEdit struct {
 	Subject string
 	Body    string
 }
+
+// StageAdviceItem classifies one snapshot file for the next commit.
+type StageAdviceItem struct {
+	FileID string `json:"file_id"`
+	Reason string `json:"reason"`
+	Risk   string `json:"risk,omitempty"`
+}
+
+// StageChange is one index change needed to make the stage match the advice.
+type StageChange struct {
+	Path    string `json:"path"`
+	OldPath string `json:"old_path,omitempty"`
+	Action  string `json:"action"` // "stage" or "unstage"
+	Partial bool   `json:"partial,omitempty"`
+}
+
+// ContextDocument is a tracked repository document sent as AI context.
+type ContextDocument struct {
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
+// StageAdvice is the AI recommendation for the next commit (VORQ-015).
+type StageAdvice struct {
+	Summary  string            `json:"summary"`
+	Stage    []StageAdviceItem `json:"stage"`
+	Hold     []StageAdviceItem `json:"hold"`
+	Subject  string            `json:"subject"`
+	Body     string            `json:"body"`
+	Context  []string          `json:"context"` // context documents that were sent
+	Changes  []StageChange     `json:"changes"` // index changes [Aplicar] performs
+	Dropped  int               `json:"dropped,omitempty"`
+	Snapshot ChangeSnapshot    `json:"snapshot"`
+}

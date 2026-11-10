@@ -279,6 +279,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.err != nil {
 				m.showError("Commit criado; leitura do resultado incompleta", msg.err)
 			}
+			if msg.kind == "stage-advice" && msg.err == nil {
+				m.receiveStageApplied()
+			}
 			if msg.kind == "commit" {
 				m.suggested = false
 				m.reviewPaths = nil
