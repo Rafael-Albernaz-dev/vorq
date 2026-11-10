@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"strings"
 	"time"
 
@@ -27,10 +28,7 @@ type aiApplyMsg struct {
 }
 
 func (m *Model) chooseAI(key string) tea.Cmd {
-	m.aiProvider = "codex"
-	if key == "g" {
-		m.aiProvider = "gemini"
-	}
+	m.aiProvider = providerForKey(key)
 	m.aiProposal, m.aiError = nil, ""
 	m.aiModels, m.aiModel, m.aiModelIndex = nil, "", 0
 	m.aiThenReview = false
@@ -38,7 +36,7 @@ func (m *Model) chooseAI(key string) tea.Cmd {
 	m.dialogID++
 	id, core, provider := m.dialogID, m.core, m.aiProvider
 	m.busy = "Listando modelos de " + provider + "…"
-	ctx, cancel := m.beginDialog(15 * time.Second)
+	ctx, cancel := m.beginDialog(app.AIModelsTimeout + uiMargin)
 	return func() tea.Msg {
 		defer cancel()
 		models, err := core.ListAIModels(ctx, provider)
@@ -115,9 +113,26 @@ func (m *Model) aiModelRows() []string {
 	return rows
 }
 
+// providerKeys maps menu keys to providers: c Codex, g Gemini, a Claude.
+var providerKeys = map[string]string{"c": "codex", "g": "gemini", "a": "claude"}
+
+func providerForKey(key string) string {
+	if p, ok := providerKeys[key]; ok {
+		return p
+	}
+	return "codex"
+}
+
+// providerMenu is the provider line shown in every provider chooser.
+const providerMenu = "[c] Codex   [g] Gemini (Antigravity)   [a] Claude Code"
+
+// uiMargin lets the core's own deadline (app.*Timeout) fire first, so its
+// precise error is shown instead of a generic UI cancellation.
+const uiMargin = 15 * time.Second
+
 func (m *Model) aiModelLabel() string {
 	if m.aiModel == "" {
-		return "Padrão do Codex"
+		return map[string]string{"codex": "Padrão do Codex", "gemini": "Padrão do Gemini", "claude": "Padrão do Claude Code"}[m.aiProvider]
 	}
 	return m.aiModel
 }
@@ -130,7 +145,7 @@ func (m *Model) generateAI() tea.Cmd {
 	id, revision, dir, provider, model, core := m.dialogID, m.draftRevision, m.dir, m.aiProvider, m.aiModel, m.core
 	m.aiProposal = nil
 	m.busy = "Analisando staged com " + provider + "…"
-	ctx, cancel := m.beginDialog(90 * time.Second)
+	ctx, cancel := m.beginDialog(app.AISuggestTimeout + uiMargin)
 	if m.aiTask == "review" || m.aiTask == "plan" {
 		cancel()
 		return m.generateAutomation()
@@ -226,7 +241,7 @@ func (m *Model) aiRecoveryKey(key string) tea.Cmd {
 		m.modal = "ai-send"
 		m.modalScroll = 0
 		m.aiProposal = nil
-	case "c", "g":
+	case "c", "g", "a":
 		return m.chooseAI(key)
 	case "l":
 		m.aiProposal = nil

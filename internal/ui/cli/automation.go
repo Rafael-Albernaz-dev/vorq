@@ -12,6 +12,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -49,7 +51,8 @@ func newAICmd(core app.AutomationService) *cobra.Command {
 		task := task
 		var provider, model string
 		var asJSON bool
-		cmd := &cobra.Command{Use: task, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		short := map[string]string{"review": "Thorough AI review of working changes (findings with evidence and suggested fixes); never changes Git", "plan": "Propose ordered whole-file commits for review; nothing is committed until execute"}[task]
+		cmd := &cobra.Command{Use: task, Short: short, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 			fmt.Fprintln(cmd.ErrOrStderr(), "Analyzing eligible working versions (including unstaged/new files); ignored and unsupported files excluded. No Git mutation before plan approval.")
@@ -61,15 +64,7 @@ func newAICmd(core app.AutomationService) *cobra.Command {
 				if asJSON {
 					return json.NewEncoder(cmd.OutOrStdout()).Encode(review)
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), terminalText(review.Summary))
-				for _, f := range review.Findings {
-					fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\nEvidence: %s\n", f.Severity, f.FileID, terminalText(f.Message), terminalText(f.Evidence))
-				}
-				for _, f := range review.Snapshot.Files {
-					if f.Excluded != "" {
-						fmt.Fprintf(cmd.OutOrStdout(), "Excluded %s: %s\n", terminalText(f.Path), terminalText(f.Excluded))
-					}
-				}
+				printReview(cmd.OutOrStdout(), review)
 				return nil
 			}
 			plan, err := core.PlanCommitsAI(ctx, ".", provider, model)
@@ -82,7 +77,7 @@ func newAICmd(core app.AutomationService) *cobra.Command {
 			printPlan(cmd.OutOrStdout(), plan, false)
 			return nil
 		}}
-		cmd.Flags().StringVar(&provider, "provider", "codex", "codex or gemini (Antigravity)")
+		cmd.Flags().StringVar(&provider, "provider", "codex", "codex, gemini (Antigravity) or claude (Claude Code)")
 		cmd.Flags().StringVar(&model, "model", "", "Official CLI model ID")
 		cmd.Flags().BoolVar(&asJSON, "json", false, "Print structured local result (includes snapshot content)")
 		root.AddCommand(cmd)
@@ -165,4 +160,69 @@ func newPathCmd(core app.InventoryService) *cobra.Command {
 	}}
 	cmd.Flags().BoolVar(&copy, "copy", false, "Write absolute path to the native clipboard")
 	return cmd
+}
+
+// printReview lays the review out in clearly separated sections and cards,
+// most severe findings first, mirroring the Studio layout.
+func printReview(out io.Writer, r *domain.DiffReview) {
+	paths := map[string]string{}
+	var excluded []domain.SnapshotFile
+	for _, f := range r.Snapshot.Files {
+		paths[f.ID] = f.Path
+		if f.Excluded != "" {
+			excluded = append(excluded, f)
+		}
+	}
+	indent := func(text, prefix string) {
+		for _, line := range strings.Split(strings.TrimSpace(terminalText(text)), "\n") {
+			fmt.Fprintln(out, prefix+line)
+		}
+	}
+	rule := strings.Repeat("─", 72)
+	counts := map[string]int{}
+	for _, f := range r.Findings {
+		counts[f.Severity]++
+	}
+	fmt.Fprintln(out, titleStyle.Render("SUMMARY"))
+	indent(r.Summary, "  ")
+	fmt.Fprintf(out, "\n  %d error(s) · %d warning(s) · %d info", counts["error"], counts["warning"], counts["info"])
+	if r.Dropped > 0 {
+		fmt.Fprintf(out, " · %d dropped (no valid evidence)", r.Dropped)
+	}
+	if len(excluded) > 0 {
+		fmt.Fprintf(out, " · %d file(s) not analysed", len(excluded))
+	}
+	fmt.Fprintln(out)
+	findings := append([]domain.ReviewFinding(nil), r.Findings...)
+	rank := map[string]int{"error": 0, "warning": 1, "info": 2}
+	sort.SliceStable(findings, func(i, j int) bool { return rank[findings[i].Severity] < rank[findings[j].Severity] })
+	badge := map[string]string{"error": errorStyle.Render("[ERROR]"), "warning": warnStyle.Render("[WARNING]"), "info": branchStyle.Render("[INFO]")}
+	if len(findings) == 0 {
+		fmt.Fprintln(out, "\n"+subtleStyle.Render(rule))
+		fmt.Fprintln(out, successStyle.Render("  ✓ No concrete issues found."))
+	}
+	for i, f := range findings {
+		path := paths[f.FileID]
+		if path == "" {
+			path = f.FileID
+		}
+		fmt.Fprintln(out, "\n"+subtleStyle.Render(rule))
+		fmt.Fprintf(out, "%s %d/%d  %s\n\n", badge[f.Severity], i+1, len(findings), branchStyle.Render(terminalText(path)))
+		indent(f.Message, "  ")
+		if strings.TrimSpace(f.Evidence) != "" {
+			fmt.Fprintln(out, "\n  "+subtleStyle.Render("Evidence"))
+			indent(f.Evidence, "  │ ")
+		}
+		if strings.TrimSpace(f.Suggestion) != "" {
+			fmt.Fprintln(out, "\n  "+successStyle.Render("Suggestion"))
+			indent(f.Suggestion, "  → ")
+		}
+	}
+	if len(excluded) > 0 {
+		fmt.Fprintln(out, "\n"+subtleStyle.Render(rule))
+		fmt.Fprintln(out, titleStyle.Render("NOT ANALYSED"))
+		for _, f := range excluded {
+			fmt.Fprintf(out, "  • %s — %s\n", terminalText(f.Path), terminalText(f.Excluded))
+		}
+	}
 }

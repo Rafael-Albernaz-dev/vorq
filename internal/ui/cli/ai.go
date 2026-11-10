@@ -30,8 +30,8 @@ func newSuggestCmd(core suggestionService) *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), terminalText(p.Message()))
 				return nil
 			}
-			if provider != "codex" && provider != "gemini" {
-				return fmt.Errorf("choose --provider codex, gemini, or rules")
+			if provider != "codex" && provider != "gemini" && provider != "claude" {
+				return fmt.Errorf("choose --provider codex, gemini, claude, or rules")
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "Sending only the staged diff to %s using the official subscription CLI.\n", provider)
 			p, err := core.SuggestCommitAI(ctx, ".", provider, model)
@@ -42,7 +42,7 @@ func newSuggestCmd(core suggestionService) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&provider, "provider", "codex", "codex, gemini (Antigravity), or rules; AI sends staged code to the selected provider")
+	cmd.Flags().StringVar(&provider, "provider", "codex", "codex, gemini (Antigravity), claude (Claude Code), or rules; AI sends staged code to the selected provider")
 	cmd.Flags().StringVar(&model, "model", "", "Model ID from the selected provider's CLI catalog (empty uses the default)")
 	cmd.Flags().StringVar(&commitType, "type", "feat", "Conventional Commit type for local rules")
 	return cmd

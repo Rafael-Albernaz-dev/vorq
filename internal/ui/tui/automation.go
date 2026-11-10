@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
 	"strconv"
@@ -38,7 +39,7 @@ func (m *Model) generateAutomation() tea.Cmd {
 	m.dialogID++
 	id, dir, core, provider, model, task := m.dialogID, m.dir, m.core, m.aiProvider, m.aiModel, m.aiTask
 	m.busy = "IA analisando mudanças elegíveis…"
-	ctx, cancel := m.beginDialog(120 * time.Second)
+	ctx, cancel := m.beginDialog(app.AnalysisTimeout + uiMargin)
 	return func() tea.Msg {
 		defer cancel()
 		msg := automationMsg{id: id, kind: task}
@@ -305,28 +306,5 @@ func (m *Model) planDiffBody() string {
 			}
 		}
 	}
-	return b.String()
-}
-func (m *Model) diffReviewBody() string {
-	if m.diffReview == nil {
-		return "Nenhuma revisão"
-	}
-	var b strings.Builder
-	b.WriteString(m.diffReview.Summary + "\n")
-	for _, finding := range m.diffReview.Findings {
-		path := finding.FileID
-		for _, f := range m.diffReview.Snapshot.Files {
-			if f.ID == finding.FileID {
-				path = f.Path
-			}
-		}
-		fmt.Fprintf(&b, "\n[%s] %s\n%s\nEvidência: %s\n", finding.Severity, path, finding.Message, finding.Evidence)
-	}
-	for _, f := range m.diffReview.Snapshot.Files {
-		if f.Excluded != "" {
-			fmt.Fprintf(&b, "\nNão analisado %s: %s", f.Path, f.Excluded)
-		}
-	}
-	b.WriteString("\n\nRevisão por IA; nenhum teste ou correção automática executado.")
 	return b.String()
 }

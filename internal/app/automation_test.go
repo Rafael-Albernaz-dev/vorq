@@ -250,7 +250,7 @@ func TestAutomationRenameDeletionExclusionsAndFileMode(t *testing.T) {
 	writeCommitFile(t, dir, ".gitignore", "private/\n")
 	writeCommitFile(t, dir, "private/secret.txt", "NEVER_SEND\n")
 	writeCommitFile(t, dir, "binary.dat", "binary\x00bytes")
-	writeCommitFile(t, dir, "huge.txt", strings.Repeat("x", 257*1024))
+	writeCommitFile(t, dir, "huge.txt", strings.Repeat("x", git.MaxAnalysisFile+1))
 	if err := os.Symlink("private/secret.txt", filepath.Join(dir, "link")); err != nil {
 		t.Fatal(err)
 	}

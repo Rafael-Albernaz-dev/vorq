@@ -18,6 +18,9 @@ import (
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 )
 
+// MaxAnalysisFile is the largest working file sent to review/plan (VORQ-014).
+const MaxAnalysisFile = 1024 * 1024
+
 func digest(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
 
 func (r *Repository) requireIdleRepository(ctx context.Context, dir string) error {
@@ -142,8 +145,8 @@ func (r *Repository) CaptureSnapshot(ctx context.Context, dir string) (*domain.C
 			if e != nil {
 				return nil, e
 			}
-			if info.Size() > 256*1024 {
-				file.Excluded = "file exceeds 256 KiB: handle manually"
+			if info.Size() > MaxAnalysisFile {
+				file.Excluded = "file exceeds 1 MiB: handle manually"
 				file.Fingerprint = fmt.Sprintf("large:%d:%d", info.Size(), info.ModTime().UnixNano())
 			} else {
 				data, err := fs.ReadFile(file.Path)

@@ -381,7 +381,7 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 		}
 	}
 	if m.modal == "suggest" || m.modal == "ai-options" {
-		for _, key := range []string{"c", "g", "r", "l"} {
+		for _, key := range []string{"c", "g", "a", "r", "l"} {
 			if mouseLabelHit(line, "["+key+"]", x) {
 				return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 			}

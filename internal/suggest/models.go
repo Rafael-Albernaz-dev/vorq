@@ -83,8 +83,18 @@ func (p *CLIProvider) ListModels(ctx context.Context, provider string) ([]domain
 		if len(result) == 0 {
 			return nil, fmt.Errorf("no Gemini models available in Antigravity")
 		}
+	case "claude":
+		if _, err := exec.LookPath("claude"); err != nil {
+			return nil, fmt.Errorf("Claude Code CLI not found; install it and sign in with your subscription (claude, then /login)")
+		}
+		// Aliases always resolve to the newest model of each family.
+		result = append(result, domain.AIModel{ID: "", Name: "Padrão do Claude Code"},
+			domain.AIModel{ID: "fable", Name: "Fable (mais recente)"},
+			domain.AIModel{ID: "opus", Name: "Opus (mais recente)"},
+			domain.AIModel{ID: "sonnet", Name: "Sonnet (mais recente)"},
+			domain.AIModel{ID: "haiku", Name: "Haiku (mais recente)"})
 	default:
-		return nil, fmt.Errorf("choose codex or gemini")
+		return nil, fmt.Errorf("choose codex, gemini or claude")
 	}
 	if len(result) > 64 {
 		result = result[:64]
