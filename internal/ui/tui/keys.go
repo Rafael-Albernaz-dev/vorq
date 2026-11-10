@@ -19,6 +19,9 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	if m.screen != "" {
 		return m.workflowKey(key)
 	}
+	if m.fullscreen {
+		return m.fullscreenKey(key)
+	}
 
 	// Editing wins over every printable global shortcut, including q, a, e and s.
 	if m.focusPane == "commit" && m.commitEditing {
@@ -72,6 +75,10 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	}
 	if s == "i" {
 		m.cycleIcons()
+		return nil
+	}
+	if s == "f" {
+		m.enterFullscreen()
 		return nil
 	}
 	if s == "a" || s == "e" {

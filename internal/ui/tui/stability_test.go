@@ -200,3 +200,23 @@ func driveAll(t *testing.T, m *Model, cmd tea.Cmd) {
 		queue = append(queue, follow)
 	}
 }
+
+// An explicit refresh reports its outcome; no "updating" text lingers after
+// the read finished (bug reported after VORQ-011).
+func TestExplicitRefreshReportsCompletion(t *testing.T) {
+	m, _, _, _, _ := setupStudio(t)
+	cmd := m.reloadWorkspace()
+	if !m.loading || strings.Contains(m.notice, "Atualizando") {
+		t.Fatalf("progress belongs to the spinner, notice=%q", m.notice)
+	}
+	if view := ansi.Strip(m.renderView()); !strings.Contains(view, "Atualizando workspace") {
+		t.Fatal("spinner text missing while loading")
+	}
+	driveAll(t, m, cmd)
+	if m.loading || !strings.HasPrefix(m.notice, "Workspace atualizado") {
+		t.Fatalf("refresh did not report completion: loading=%v notice=%q", m.loading, m.notice)
+	}
+	if view := ansi.Strip(m.renderView()); strings.Contains(view, "Atualizando workspace") {
+		t.Fatal("'Atualizando workspace' still visible after the read finished")
+	}
+}

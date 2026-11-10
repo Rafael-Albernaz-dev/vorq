@@ -36,8 +36,9 @@ func (m *Model) reloadWorkspace() tea.Cmd {
 	if m.loading {
 		return nil
 	}
-	m.reloadInventory = true
-	m.notice = "Atualizando workspace…"
+	// The spinner shows progress while loading; the notice reports the outcome
+	// (never a lingering "updating" text after the read finished).
+	m.reloadInventory, m.explicitReload = true, true
 	return m.refresh()
 }
 

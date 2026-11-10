@@ -47,6 +47,9 @@ func (m *Model) readInventory(path string, offset int) tea.Cmd {
 }
 func (m *Model) receiveInventory(msg inventoryMsg) tea.Cmd {
 	if msg.workspace != m.dir || msg.generation != m.loadID || m.studio == nil {
+		if m.notice == "Carregando pasta…" {
+			m.notice = "" // outdated read; a newer one (if any) reports itself
+		}
 		return nil
 	}
 	if msg.err != nil {

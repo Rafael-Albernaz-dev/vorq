@@ -129,13 +129,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.loading = false
+		explicit := m.explicitReload
+		m.explicitReload = false
 		if msg.err != nil {
 			m.reloadInventory = false
 			m.stale = true
 			m.notice = "Snapshot desatualizado · r para tentar novamente: " + msg.err.Error()
 			return m, nil
 		}
-		return m, m.UpdateTree(msg.tree)
+		cmd := m.UpdateTree(msg.tree)
+		if explicit {
+			m.notice = "Workspace atualizado · " + time.Now().Format("15:04:05")
+		}
+		return m, cmd
 	case fileMsg:
 		if msg.id != m.fileID {
 			return m, nil
