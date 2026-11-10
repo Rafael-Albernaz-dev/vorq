@@ -60,7 +60,7 @@ func (m *Model) inspectDiscard() tea.Cmd {
 	m.dialogID++
 	id, core, dir, path := m.dialogID, m.core, m.dir, node.Path
 	ctx, cancel := m.beginDialog(20 * time.Second)
-	m.modal, m.modalScroll, m.discardPlan = "discard", 0, nil
+	m.modal, m.modalScroll, m.discardPlan = modalDiscard, 0, nil
 	m.busy = "Verificando impacto do descarte…"
 	return func() tea.Msg {
 		defer cancel()
@@ -70,7 +70,7 @@ func (m *Model) inspectDiscard() tea.Cmd {
 }
 
 func (m *Model) discard(preserve bool) tea.Cmd {
-	if m.modal != "discard" || m.discardPlan == nil || !m.canAct() {
+	if m.modal != modalDiscard || m.discardPlan == nil || !m.canAct() {
 		return nil
 	}
 	plan := *m.discardPlan

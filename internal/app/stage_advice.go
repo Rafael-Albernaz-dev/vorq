@@ -221,10 +221,7 @@ func (a *App) ApplyStageAdvice(ctx context.Context, dir string, advice *domain.S
 	if proj.RootPath != advice.Snapshot.Workspace {
 		return fmt.Errorf("advice belongs to another workspace")
 	}
-	r, err := a.automation()
-	if err != nil {
-		return err
-	}
+	r := a.gitRunner
 	if err = r.ValidateSnapshot(ctx, advice.Snapshot, advice.Snapshot.Head, advice.Snapshot.Index); err != nil {
 		return fmt.Errorf("changes since the analysis; run it again (nothing applied): %w", err)
 	}

@@ -177,17 +177,28 @@ func (r *prRepository) PublishedHead(context.Context, string, string, string, st
 	return nil
 }
 
-type fakePRProvider struct{ saved []domain.PRDraft }
+type fakePRProvider struct {
+	saved []domain.PRDraft
+	ready []int
+	view  *domain.PullRequest
+}
 
 func (f *fakePRProvider) List(context.Context, string, string, domain.PRListOptions) ([]domain.PullRequest, error) {
 	return nil, nil
 }
 func (f *fakePRProvider) View(context.Context, string, string, int) (*domain.PullRequest, error) {
-	return nil, nil
+	if f.view != nil {
+		return f.view, nil
+	}
+	return &domain.PullRequest{}, nil
 }
 func (f *fakePRProvider) Save(_ context.Context, _ string, d domain.PRDraft) (string, error) {
 	f.saved = append(f.saved, d)
 	return "https://github.com/owner/repo/pull/1", nil
+}
+func (f *fakePRProvider) Ready(_ context.Context, _, _ string, number int) error {
+	f.ready = append(f.ready, number)
+	return nil
 }
 func (f *fakePRProvider) DefaultBranch(context.Context, string, string) (string, error) {
 	return "main", nil
@@ -342,5 +353,36 @@ func TestShallowHistoryAndLargePatchNotice(t *testing.T) {
 	p, e := a.GetHistory(ctx, clone, domain.HistoryOptions{Limit: 10})
 	if e != nil || !p.Shallow || p.Count != 1 {
 		t.Fatalf("shallow %+v %v", p, e)
+	}
+}
+
+// Marking ready requires an open draft PR; it never merges.
+func TestMarkPullRequestReadyChecksState(t *testing.T) {
+	_, r, dir := seedWorkflow(t)
+	ctx := context.Background()
+	a := app.NewApp(&prRepository{Repository: git.NewRepository(r)})
+	provider := &fakePRProvider{}
+	a.SetPullRequestProvider(provider)
+	if _, e := r.Exec(ctx, dir, "remote", "add", "origin", "git@github.com:owner/repo.git"); e != nil {
+		t.Fatal(e)
+	}
+	for _, c := range []struct {
+		pr   domain.PullRequest
+		want string
+	}{
+		{domain.PullRequest{Number: 1, State: "MERGED", Draft: true}, "only open PRs"},
+		{domain.PullRequest{Number: 1, State: "OPEN", Draft: false}, "already ready"},
+	} {
+		provider.view = &c.pr
+		if e := a.MarkPullRequestReady(ctx, dir, 1); e == nil || !strings.Contains(e.Error(), c.want) {
+			t.Fatalf("want %q, got %v", c.want, e)
+		}
+	}
+	provider.view = &domain.PullRequest{Number: 1, State: "OPEN", Draft: true}
+	if e := a.MarkPullRequestReady(ctx, dir, 1); e != nil || len(provider.ready) != 1 || provider.ready[0] != 1 {
+		t.Fatalf("ready=%v err=%v", provider.ready, e)
+	}
+	if e := a.MarkPullRequestReady(ctx, dir, 0); e == nil {
+		t.Fatal("invalid number accepted")
 	}
 }

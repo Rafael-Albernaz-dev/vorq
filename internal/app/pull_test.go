@@ -209,7 +209,7 @@ func TestPullRechecksStatusAfterFetch(t *testing.T) {
 		t.Fatal(e)
 	}
 	head, _ := r.RevParseHead(ctx, dir)
-	if _, e = a.PullChanges(ctx, dir, *target); e == nil || !strings.Contains(e.Error(), "aplicação bloqueada") {
+	if _, e = a.PullChanges(ctx, dir, *target); e == nil || !strings.Contains(e.Error(), "apply blocked") {
 		t.Fatal(e)
 	}
 	after, _ := r.RevParseHead(ctx, dir)

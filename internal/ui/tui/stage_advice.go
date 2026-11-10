@@ -18,22 +18,22 @@ import (
 const applyButton = "[Aplicar]"
 
 // isWorkingAnalysis: tasks that analyse working versions (staged or not).
-func isWorkingAnalysis(task string) bool {
-	return task == "review" || task == "plan" || task == "stage"
+func isWorkingAnalysis(task aiTaskID) bool {
+	return task == taskReview || task == taskPlan || task == taskStage
 }
 
 func (m *Model) stageAdviceKey(key tea.KeyMsg) tea.Cmd {
 	s := key.String()
 	switch m.modal {
-	case "stage-advice":
+	case modalStageAdvice:
 		if s == "enter" || s == "a" {
 			if m.stageAdvice == nil || len(m.stageAdvice.Stage) == 0 {
 				m.notice = "A IA não recomendou nenhum arquivo para o próximo commit."
 				return nil
 			}
-			m.modal, m.modalScroll = "stage-confirm", 0
+			m.modal, m.modalScroll = modalStageConfirm, 0
 		}
-	case "stage-confirm":
+	case modalStageConfirm:
 		if s == "enter" {
 			return m.applyStageAdvice()
 		}

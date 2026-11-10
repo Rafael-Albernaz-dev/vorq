@@ -111,7 +111,7 @@ func TestVisualNativeStatusAndIntentionalFileTypes(t *testing.T) {
 
 func TestVisualUnknownInventoryNeverClaimsClean(t *testing.T) {
 	m := NewModel(context.Background(), nil, "/workspace")
-	for _, tab := range []string{"alteracoes", "repositorio"} {
+	for _, tab := range []treeTab{tabChanges, tabRepository} {
 		m.activeTab = tab
 		m.loading = true
 		text := ansi.Strip(m.treeView(80))

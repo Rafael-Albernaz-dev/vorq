@@ -42,14 +42,7 @@ func (a *App) GetPushTarget(ctx context.Context, currentDir string) (*domain.Pus
 		}
 	} else {
 		target.RemoteBranch = branch
-		for _, name := range remotes {
-			if name == "origin" {
-				target.Remote = name
-			}
-		}
-		if target.Remote == "" && len(remotes) == 1 {
-			target.Remote = remotes[0]
-		}
+		target.Remote = selectRemote(remotes, "")
 		if target.Remote == "" {
 			if len(remotes) == 0 {
 				return nil, fmt.Errorf("no remote configured; add a remote before publishing")

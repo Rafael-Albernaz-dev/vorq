@@ -6,23 +6,23 @@ import (
 
 func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 	s := key.String()
-	if m.modal == "plan-edit" {
+	if m.modal == modalPlanEdit {
 		return m.automationKey(key)
 	}
-	if m.modal == "plan-diff" && s == "esc" {
-		m.modal = "plan"
+	if m.modal == modalPlanDiff && s == "esc" {
+		m.modal = modalPlan
 		return nil
 	}
-	if m.modal == "plan" && (s == "up" || s == "down" || s == "j" || s == "k") {
+	if m.modal == modalPlan && (s == "up" || s == "down" || s == "j" || s == "k") {
 		return m.automationKey(key)
 	}
-	if m.modal == "ai-models" && s != "esc" && s != "q" {
+	if m.modal == modalAiModels && s != "esc" && s != "q" {
 		return m.aiModelKey(s)
 	}
-	if m.modal == "branches" && s != "esc" && s != "q" {
+	if m.modal == modalBranches && s != "esc" && s != "q" {
 		return m.branchSelectorKey(key)
 	}
-	if m.modal != "worktrees" && (s == "pgdown" || s == "down" || s == "j") {
+	if m.modal != modalWorktrees && (s == "pgdown" || s == "down" || s == "j") {
 		delta := 1
 		if s == "pgdown" {
 			delta = m.modalBodyHeight()
@@ -30,7 +30,7 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 		m.modalScroll += delta
 		return nil
 	}
-	if m.modal != "worktrees" && (s == "pgup" || s == "up" || s == "k") {
+	if m.modal != modalWorktrees && (s == "pgup" || s == "up" || s == "k") {
 		delta := 1
 		if s == "pgup" {
 			delta = m.modalBodyHeight()
@@ -57,7 +57,7 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 		m.discardPlan = nil
 		m.branchSwitchPlan = nil
 		m.busy = ""
-		if m.modal == "commit" || m.modal == "suggest" {
+		if m.modal == modalCommit || m.modal == modalSuggest {
 			m.notice = "Revisão cancelada. Os arquivos permanecem em stage."
 		}
 		m.modal = ""
@@ -70,15 +70,19 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch m.modal {
-	case "plan", "plan-execute", "diff-review":
+	case modalPlan, modalPlanExecute, modalDiffReview:
 		return m.automationKey(key)
-	case "stage-advice", "stage-confirm":
+	case modalStageAdvice, modalStageConfirm:
 		return m.stageAdviceKey(key)
-	case "ai-send":
+	case modalPRReady:
+		if s == "enter" {
+			return m.markPRReady()
+		}
+	case modalAiSend:
 		if s == "enter" {
 			return m.generateAI()
 		}
-	case "ai-review":
+	case modalAiReview:
 		if s == "enter" {
 			m.aiThenReview = false
 			return m.applyAI()
@@ -88,11 +92,11 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			return m.applyAI()
 		}
 		return m.aiRecoveryKey(s)
-	case "ai-error":
+	case modalAiError:
 		return m.aiRecoveryKey(s)
-	case "ai-options":
+	case modalAiOptions:
 		return m.aiRecoveryKey(s)
-	case "appearance":
+	case modalAppearance:
 		if s == "i" {
 			m.cycleIcons()
 		}
@@ -101,14 +105,14 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 				return m.selectTheme(i)
 			}
 		}
-	case "discard":
+	case modalDiscard:
 		if s == "enter" {
 			return m.discard(false)
 		}
 		if s == "u" {
 			return m.discard(true)
 		}
-	case "unstage":
+	case modalUnstage:
 		if s == "enter" {
 			if n := m.selectedNode(); n != nil {
 				m.partialApproved = n.Path
@@ -116,14 +120,14 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			m.modal = ""
 			return m.stage()
 		}
-	case "help", "error", "result":
-		if m.modal == "error" && s == "t" && m.terminalRetryKind != "" {
+	case modalHelp, modalError, modalResult:
+		if m.modal == modalError && s == "t" && m.terminalRetryKind != "" {
 			return m.retryInTerminal()
 		}
 		if s == "?" || s == "enter" {
 			m.modal = ""
 		}
-	case "worktrees":
+	case modalWorktrees:
 		switch s {
 		case "up", "k":
 			m.worktreeIndex = max(0, m.worktreeIndex-1)
@@ -139,23 +143,23 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 				return m.switchWorkspace(w.Path)
 			}
 		}
-	case "switch-branch":
+	case modalSwitchBranch:
 		if s == "enter" {
 			return m.switchBranch()
 		}
-	case "pull":
+	case modalPull:
 		if s == "enter" {
 			return m.pull()
 		}
-	case "push":
+	case modalPush:
 		if s == "enter" {
 			return m.push()
 		}
-	case "suggest":
+	case modalSuggest:
 		if _, ok := providerKeys[s]; ok {
 			return m.chooseAI(s)
 		}
-		if m.aiTask != "" && m.aiTask != "suggest" {
+		if m.aiTask != taskNone && m.aiTask != taskSuggest {
 			return nil
 		}
 		for i, value := range []string{"1", "2", "3", "4", "5", "6", "7", "8"} {
@@ -163,7 +167,7 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 				return m.propose([]string{"feat", "fix", "chore", "refactor", "docs", "test", "style", "perf"}[i])
 			}
 		}
-	case "commit":
+	case modalCommit:
 		if s == "enter" && m.commitPhase == "review" {
 			return m.commit()
 		}

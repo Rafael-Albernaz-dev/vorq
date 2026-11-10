@@ -16,6 +16,7 @@ type workflowState struct {
 	prs                          []domain.PullRequest
 	prOptions                    domain.PRListOptions
 	prIndex, prOffset            int
+	readyPR                      int
 	associations                 map[string][]domain.PullRequest
 	detailText                   string
 	detailOffset                 int

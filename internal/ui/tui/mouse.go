@@ -52,7 +52,7 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress {
 		return m, nil
 	}
-	if m.modal == "workflow" {
+	if m.modal == modalWorkflow {
 		return m, m.workflowFormMouse(msg)
 	}
 	if m.modal != "" {
@@ -156,7 +156,7 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if y >= 0 && y < 3 {
 			index := mouseTabAt([]string{"Alterações", "Repositório"}, width, x)
 			if index >= 0 {
-				m.switchTree([]string{"alteracoes", "repositorio"}[index])
+				m.switchTree([]treeTab{tabChanges, tabRepository}[index])
 				return m, m.loadSelected()
 			}
 		}
@@ -326,7 +326,7 @@ func fieldCursorAt(value string, width, row, column, offset int) int {
 }
 
 func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
-	if m.modal == "branches" {
+	if m.modal == modalBranches {
 		return m.branchSelectorMouse(msg)
 	}
 	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
@@ -334,7 +334,7 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 		if msg.Button == tea.MouseButtonWheelUp {
 			delta = -3
 		}
-		if m.modal == "worktrees" {
+		if m.modal == modalWorktrees {
 			m.worktreeIndex = min(max(0, m.worktreeIndex+delta/3), max(0, len(m.worktrees)-1))
 		} else {
 			m.modalScroll = max(0, m.modalScroll+delta)
@@ -370,7 +370,7 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 	if m.busy != "" {
 		return nil
 	}
-	if m.modal == "ai-models" {
+	if m.modal == modalAiModels {
 		for i := range m.aiModels {
 			key := fmt.Sprint(i + 1)
 			if mouseLabelHit(line, "["+key+"]", x) {
@@ -380,17 +380,17 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 			}
 		}
 	}
-	if m.modal == "suggest" || m.modal == "ai-options" {
+	if m.modal == modalSuggest || m.modal == modalAiOptions {
 		for _, key := range []string{"c", "g", "a", "r", "l"} {
 			if mouseLabelHit(line, "["+key+"]", x) {
 				return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 			}
 		}
 	}
-	if m.modal == "appearance" && mouseLabelHit(line, "[i]", x) {
+	if m.modal == modalAppearance && mouseLabelHit(line, "[i]", x) {
 		return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	}
-	if m.modal == "suggest" || m.modal == "appearance" {
+	if m.modal == modalSuggest || m.modal == modalAppearance {
 		for i := 1; i <= 8; i++ {
 			label := "[" + string(rune('0'+i)) + "]"
 			if mouseLabelHit(line, label, x) {
@@ -398,7 +398,7 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 			}
 		}
 	}
-	if m.modal == "worktrees" {
+	if m.modal == modalWorktrees {
 		raw, owners := m.worktreeModalRows()
 		var wrappedOwners []int
 		inner := min(90, m.width-6) - 4

@@ -102,15 +102,15 @@ func (m *Model) runPanelAction(index int) tea.Cmd {
 	m.commitEditing = false
 	switch actions[index].key {
 	case "ai-configure":
-		return m.openAIAction("configure")
+		return m.openAIAction(taskConfigure)
 	case "ai-suggest":
-		return m.openAIAction("suggest")
+		return m.openAIAction(taskSuggest)
 	case "ai-review":
-		return m.openAIAction("review")
+		return m.openAIAction(taskReview)
 	case "ai-stage":
-		return m.openAIAction("stage")
+		return m.openAIAction(taskStage)
 	case "ai-plan":
-		return m.openAIAction("plan")
+		return m.openAIAction(taskPlan)
 	case "ai-saved":
 		return m.loadAutomationPlan()
 	case "switch-branch":

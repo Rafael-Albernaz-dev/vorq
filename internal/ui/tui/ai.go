@@ -32,7 +32,7 @@ func (m *Model) chooseAI(key string) tea.Cmd {
 	m.aiProposal, m.aiError = nil, ""
 	m.aiModels, m.aiModel, m.aiModelIndex = nil, "", 0
 	m.aiThenReview = false
-	m.modal, m.modalScroll = "ai-models", 0
+	m.modal, m.modalScroll = modalAiModels, 0
 	m.dialogID++
 	id, core, provider := m.dialogID, m.core, m.aiProvider
 	m.busy = "Listando modelos de " + provider + "…"
@@ -75,13 +75,13 @@ func (m *Model) aiModelKey(key string) tea.Cmd {
 	case "enter":
 		if len(m.aiModels) > 0 {
 			m.aiModel = m.aiModels[m.aiModelIndex].ID
-			if m.aiTask == "configure" {
+			if m.aiTask == taskConfigure {
 				m.modal = ""
 				m.rightTab = "ai"
 				m.notice = "Modelo escolhido: " + m.aiModelLabel()
 				return nil
 			}
-			m.modal, m.modalScroll = "ai-send", 0
+			m.modal, m.modalScroll = modalAiSend, 0
 		}
 		return nil
 	default:
@@ -146,7 +146,7 @@ func (m *Model) generateAI() tea.Cmd {
 	m.aiProposal = nil
 	m.busy = "Analisando staged com " + provider + "…"
 	ctx, cancel := m.beginDialog(app.AISuggestTimeout + uiMargin)
-	if m.aiTask == "pr" {
+	if m.aiTask == taskPr {
 		cancel()
 		return m.generatePRAI()
 	}
@@ -179,14 +179,14 @@ func (m *Model) receiveAI(msg aiProposalMsg) tea.Cmd {
 		return nil
 	}
 	m.aiProposal, m.aiRevision = msg.proposal, msg.revision
-	m.modal, m.modalScroll = "ai-review", 0
+	m.modal, m.modalScroll = modalAiReview, 0
 	return nil
 }
 
 func (m *Model) aiFailure(err error) {
 	m.aiProposal = nil
 	m.aiError = err.Error()
-	m.modal, m.modalScroll = "ai-error", 0
+	m.modal, m.modalScroll = modalAiError, 0
 }
 
 func (m *Model) applyAI() tea.Cmd {
@@ -240,9 +240,9 @@ func (m *Model) receiveAIApply(msg aiApplyMsg) tea.Cmd {
 func (m *Model) aiRecoveryKey(key string) tea.Cmd {
 	switch key {
 	case "o":
-		m.modal, m.modalScroll = "ai-options", 0
+		m.modal, m.modalScroll = modalAiOptions, 0
 	case "r":
-		m.modal = "ai-send"
+		m.modal = modalAiSend
 		m.modalScroll = 0
 		m.aiProposal = nil
 	case "c", "g", "a":

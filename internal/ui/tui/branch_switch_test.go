@@ -78,7 +78,7 @@ func TestBranchSwitchDirtyBlockedAndLateReplyIgnored(t *testing.T) {
 	}
 	m.branchIndex = selected
 	drive(t, m, m.reviewBranchSwitch())
-	if m.modal != "error" || !strings.Contains(m.lastError, "workspace deve estar limpo") {
+	if m.modal != "error" || !strings.Contains(m.lastError, "workspace must be clean") {
 		t.Fatal("dirty branch switch not blocked")
 	}
 	press(m, "esc")

@@ -20,7 +20,7 @@ type prAIMsg struct {
 }
 
 // prAIModals are the AI dialogs that return to the PR form on Esc.
-var prAIModals = map[string]bool{"suggest": true, "ai-models": true, "ai-send": true, "ai-error": true, "ai-options": true}
+var prAIModals = map[modalID]bool{modalSuggest: true, modalAiModels: true, modalAiSend: true, modalAiError: true, modalAiOptions: true}
 
 func (m *Model) syncPRDraftFromForm() {
 	if m.formKind != "pr" || len(m.fields) < 3 {
@@ -35,22 +35,22 @@ func (m *Model) openPRAI() tea.Cmd {
 		return nil
 	}
 	m.syncPRDraftFromForm()
-	m.aiTask = "pr"
+	m.aiTask = taskPr
 	m.aiError = ""
 	if m.aiProvider != "" && len(m.aiModels) > 0 {
-		m.modal, m.modalScroll = "ai-send", 0
+		m.modal, m.modalScroll = modalAiSend, 0
 		return nil
 	}
-	m.modal, m.modalScroll = "suggest", 0
+	m.modal, m.modalScroll = modalSuggest, 0
 	return nil
 }
 
 // backToPRForm restores the form after leaving an AI dialog.
 func (m *Model) backToPRForm() bool {
-	if m.aiTask != "pr" || m.formKind != "pr" || len(m.fields) == 0 || !prAIModals[m.modal] {
+	if m.aiTask != taskPr || m.formKind != "pr" || len(m.fields) == 0 || !prAIModals[m.modal] {
 		return false
 	}
-	m.modal, m.modalScroll, m.busy = "workflow", 0, ""
+	m.modal, m.modalScroll, m.busy = modalWorkflow, 0, ""
 	return true
 }
 
@@ -82,8 +82,8 @@ func (m *Model) receivePRAI(msg prAIMsg) tea.Cmd {
 	m.fields[0].Value, m.fields[0].Cursor = msg.draft.Title, len([]rune(msg.draft.Title))
 	m.fields[1].Value, m.fields[1].Cursor = msg.draft.Body, 0
 	m.prDraft.Title, m.prDraft.Body, m.prDraft.HeadOID = msg.draft.Title, msg.draft.Body, msg.draft.HeadOID
-	m.modal, m.modalScroll, m.fieldIndex, m.formReview = "workflow", 0, 0, false
-	m.aiTask = ""
+	m.modal, m.modalScroll, m.fieldIndex, m.formReview = modalWorkflow, 0, 0, false
+	m.aiTask = taskNone
 	m.notice = "Título e descrição gerados pela IA (" + m.aiProvider + "). Revise e edite antes de enviar; Ctrl+S revisa."
 	return nil
 }

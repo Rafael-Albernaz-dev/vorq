@@ -26,7 +26,7 @@ func NewModel(ctx context.Context, core app.StudioService, dir string) *Model {
 	m := &Model{core: core,
 		// The Studio owns the screen: native commands never prompt on its TTY.
 		operationsState: operationsState{ctx: domain.WithoutTerminal(ctx)},
-		navigationState: navigationState{activeTab: "alteracoes", viewerTab: "trabalho", focusPane: "tree", expanded: map[string]bool{}, positions: map[string]treePosition{}},
+		navigationState: navigationState{activeTab: tabChanges, viewerTab: "trabalho", focusPane: "tree", expanded: map[string]bool{}, positions: map[treeTab]treePosition{}},
 		appearanceState: appearanceState{width: 100, height: 30},
 		workspaceState:  workspaceState{dir: dir, drafts: map[string]commitDraft{}},
 		commitState:     commitState{commitField: "summary"},
@@ -273,7 +273,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.modal = ""
 			m.notice = msg.notice
 			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull") {
-				m.modal = "result"
+				m.modal = modalResult
 				m.resultKind = msg.kind
 				m.resultBody = msg.notice
 				m.modalScroll = 0
@@ -311,7 +311,7 @@ func (m *Model) showError(context string, err error) {
 	m.terminalRetryKind = "" // only offerTerminalRetry, called right after, may set it
 	m.lastError = context + "\n\n" + err.Error()
 	m.notice = context + ": " + err.Error()
-	m.modal = "error"
+	m.modal = modalError
 	m.modalScroll = 0
 }
 func (m *Model) canAct() bool {

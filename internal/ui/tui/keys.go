@@ -9,7 +9,7 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 	if s == "ctrl+c" {
 		return tea.Quit
 	}
-	if m.modal == "workflow" {
+	if m.modal == modalWorkflow {
 		return m.workflowFormKey(key)
 	}
 	if m.modal != "" {
@@ -64,12 +64,12 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if s == "?" {
-		m.modal = "help"
+		m.modal = modalHelp
 		m.modalScroll = 0
 		return nil
 	}
 	if s == "t" {
-		m.modal = "appearance"
+		m.modal = modalAppearance
 		m.modalScroll = 0
 		return nil
 	}
@@ -82,9 +82,9 @@ func (m *Model) handleKey(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if s == "a" || s == "e" {
-		tab := "alteracoes"
+		tab := tabChanges
 		if s == "e" {
-			tab = "repositorio"
+			tab = tabRepository
 		}
 		m.switchTree(tab)
 		m.focusPane = "tree"
@@ -269,8 +269,8 @@ func (m *Model) openSuggestion() {
 		return
 	}
 	m.rightTab = "commit"
-	m.aiTask = "suggest"
-	m.modal = "suggest"
+	m.aiTask = taskSuggest
+	m.modal = modalSuggest
 	m.modalScroll = 0
 	m.commitPhase = "type"
 	m.commitEditing = false

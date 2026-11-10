@@ -274,7 +274,10 @@ func TestMouse_SamePathInBothGroupsSelectsCorrespondingDiff(t *testing.T) {
 func TestMouse_FooterOpensPushAndWorktreesWithoutExecutingThem(t *testing.T) {
 	m, core, _, _, _ := setupStudio(t)
 	m.Update(tea.WindowSizeMsg{Width: 180, Height: 42})
-	for _, control := range []struct{ label, modal string }{{"p Push", "push"}, {"w Worktrees", "worktrees"}, {"? Ajuda", "help"}} {
+	for _, control := range []struct {
+		label string
+		modal modalID
+	}{{"p Push", "push"}, {"w Worktrees", "worktrees"}, {"? Ajuda", "help"}} {
 		x, y := mouseLabelPosition(t, m.View(), control.label)
 		drive(t, m, mousePress(m, x+1, y))
 		if m.modal != control.modal || core.pushCalls != 0 || core.commitCalls != 0 {

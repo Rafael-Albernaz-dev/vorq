@@ -25,7 +25,7 @@ func (m *Model) stage() tea.Cmd {
 		return nil
 	}
 	if node.Status.IsStaged() && node.Status.IsUnstaged() && m.partialApproved != node.Path {
-		m.modal = "unstage"
+		m.modal = modalUnstage
 		m.modalScroll = 0
 		return nil
 	}
@@ -79,7 +79,7 @@ func (m *Model) review() tea.Cmd {
 	}
 	m.dialogID++
 	id, revision, core, dir := m.dialogID, m.draftRevision, m.core, m.dir
-	m.modal = "commit"
+	m.modal = modalCommit
 	m.modalScroll = 0
 	m.commitPhase = "loading"
 	m.busy = "Revisando arquivos no stage…"
@@ -123,7 +123,7 @@ func (m *Model) inspectPush() tea.Cmd {
 	}
 	m.dialogID++
 	id, core, dir := m.dialogID, m.core, m.dir
-	m.modal = "push"
+	m.modal = modalPush
 	m.modalScroll = 0
 	m.pushTarget = nil
 	m.busy = "Inspecionando destino…"
@@ -169,7 +169,7 @@ func (m *Model) inspectWorktrees() tea.Cmd {
 	}
 	m.dialogID++
 	id, core, dir := m.dialogID, m.core, m.dir
-	m.modal = "worktrees"
+	m.modal = modalWorktrees
 	m.modalScroll = 0
 	m.worktrees = nil
 	m.busy = "Listando worktrees…"

@@ -77,7 +77,7 @@ func newTreeCmd(core app.WorkflowService) *cobra.Command {
 func newPRCmd(core prCore) *cobra.Command {
 	root := &cobra.Command{Use: "pr", Short: "List, inspect, create and edit GitHub PRs using authenticated gh"}
 	var o domain.PRListOptions
-	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(c *cobra.Command, args []string) error {
+	list := &cobra.Command{Use: "list", Short: "List PRs of the GitHub repository (explicit network call)", Args: cobra.NoArgs, RunE: func(c *cobra.Command, args []string) error {
 		prs, e := core.ListPullRequests(c.Context(), ".", o)
 		if e != nil {
 			return e
@@ -93,7 +93,7 @@ func newPRCmd(core prCore) *cobra.Command {
 	list.Flags().StringVar(&o.State, "state", "open", "open, closed, merged or all")
 	list.Flags().StringVar(&o.Search, "search", "", "GitHub search query")
 	list.Flags().IntVar(&o.Limit, "limit", 100, "Maximum PRs (1–500)")
-	view := &cobra.Command{Use: "view <number>", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
+	view := &cobra.Command{Use: "view <number>", Short: "Show a PR with checks, reviews and comments", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
 		n, e := strconv.Atoi(args[0])
 		if e != nil {
 			return e
@@ -109,7 +109,7 @@ func newPRCmd(core prCore) *cobra.Command {
 		fmt.Fprintln(c.OutOrStdout(), terminalText(string(raw)))
 		return nil
 	}}
-	root.AddCommand(list, view, newPRSaveCmd(core, false), newPRSaveCmd(core, true))
+	root.AddCommand(list, view, newPRSaveCmd(core, false), newPRSaveCmd(core, true), newPRReadyCmd(core))
 	return root
 }
 
@@ -125,12 +125,14 @@ func newPRSaveCmd(core prCore, edit bool) *cobra.Command {
 	var labels, reviewers, remove []string
 	var draft, yes bool
 	use := "create"
+	short := "Create a PR for the published current branch (optionally written with --ai); asks before sending"
 	argsCheck := cobra.NoArgs
 	if edit {
 		use = "edit <number>"
+		short = "Edit a PR's title, body, base, labels or reviewers; asks before sending"
 		argsCheck = cobra.ExactArgs(1)
 	}
-	c := &cobra.Command{Use: use, Args: argsCheck, RunE: func(c *cobra.Command, args []string) error {
+	c := &cobra.Command{Use: use, Short: short, Args: argsCheck, RunE: func(c *cobra.Command, args []string) error {
 		var d domain.PRDraft
 		if edit {
 			n, e := strconv.Atoi(args[0])
@@ -180,7 +182,7 @@ func newPRSaveCmd(core prCore, edit bool) *cobra.Command {
 		if !yes {
 			choice, e := readCommitChoice(bufio.NewReader(c.InOrStdin()), c.OutOrStdout(), "Enviar alteração de PR ao GitHub? [y/n]: ", []string{"y", "n"})
 			if e != nil {
-				return fmt.Errorf("confirmação de PR interrompida; nenhum envio solicitado (use --yes para scripts)")
+				return fmt.Errorf("PR confirmation interrupted; nothing sent (use --yes in scripts)")
 			}
 			if choice != "y" {
 				fmt.Fprintln(c.OutOrStdout(), "PR cancelado.")
@@ -208,5 +210,39 @@ func newPRSaveCmd(core prCore, edit bool) *cobra.Command {
 		c.Flags().StringVar(&model, "model", "", "AI model ID for --ai")
 	}
 	c.Flags().BoolVarP(&yes, "yes", "y", false, "Send to displayed destination without interactive confirmation")
+	return c
+}
+
+// newPRReadyCmd: `vorq pr ready <n>` marks an open draft PR ready for review
+// after confirmation (or --yes). It never merges.
+func newPRReadyCmd(core prCore) *cobra.Command {
+	var yes bool
+	c := &cobra.Command{Use: "ready <number>", Short: "Mark an open draft PR as ready for review (allows merging on GitHub); never merges", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
+		n, e := strconv.Atoi(args[0])
+		if e != nil || n <= 0 {
+			return fmt.Errorf("invalid PR number %q", args[0])
+		}
+		link, e := core.GetRepositoryLink(c.Context(), ".")
+		if e != nil {
+			return e
+		}
+		if !yes {
+			prompt := fmt.Sprintf("Mark PR #%d on github.com/%s as ready for review? [y/n]: ", n, link.Slug)
+			choice, e := readCommitChoice(bufio.NewReader(c.InOrStdin()), c.OutOrStdout(), prompt, []string{"y", "n"})
+			if e != nil {
+				return fmt.Errorf("confirmation interrupted; nothing changed (use --yes in scripts)")
+			}
+			if choice != "y" {
+				fmt.Fprintln(c.OutOrStdout(), "Cancelled; PR unchanged.")
+				return nil
+			}
+		}
+		if e = core.MarkPullRequestReady(c.Context(), ".", n); e != nil {
+			return e
+		}
+		fmt.Fprintf(c.OutOrStdout(), "PR #%d is ready for review; it can now be merged on GitHub.\n", n)
+		return nil
+	}}
+	c.Flags().BoolVarP(&yes, "yes", "y", false, "Skip the confirmation prompt")
 	return c
 }

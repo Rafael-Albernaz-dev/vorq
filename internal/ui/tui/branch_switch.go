@@ -28,7 +28,7 @@ func (m *Model) inspectBranches() tea.Cmd {
 	}
 	m.dialogID++
 	id, core, dir := m.dialogID, m.core, m.dir
-	m.modal = "branches"
+	m.modal = modalBranches
 	m.modalScroll = 0
 	m.localBranches = nil
 	m.branchSwitchPlan = nil
@@ -47,7 +47,7 @@ func (m *Model) reviewBranchSwitch() tea.Cmd {
 	}
 	m.dialogID++
 	id, core, dir, name := m.dialogID, m.core, m.dir, m.localBranches[m.branchIndex].Name
-	m.modal = "switch-branch"
+	m.modal = modalSwitchBranch
 	m.modalScroll = 0
 	m.branchSwitchPlan = nil
 	m.busy = "Revisando troca de branch…"

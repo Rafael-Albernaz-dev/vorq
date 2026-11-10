@@ -24,17 +24,14 @@ type PullService interface {
 }
 
 func (a *App) GetPullTarget(ctx context.Context, dir string) (*domain.PullTarget, error) {
-	repo, ok := a.gitRunner.(PullRepository)
-	if !ok {
-		return nil, fmt.Errorf("adaptador sem suporte a pull")
-	}
+	repo := a.gitRunner
 	p, e := a.ResolveProject(ctx, dir)
 	if e != nil {
 		return nil, e
 	}
 	branch, e := a.gitRunner.CurrentBranch(ctx, p.RootPath)
 	if e != nil {
-		return nil, fmt.Errorf("atualização requer uma branch local ativa (HEAD destacado não é aceito)")
+		return nil, fmt.Errorf("updating requires an attached local branch (detached HEAD is not accepted)")
 	}
 	head, e := a.gitRunner.RevParseHead(ctx, p.RootPath)
 	if e != nil {
@@ -45,18 +42,18 @@ func (a *App) GetPullTarget(ctx context.Context, dir string) (*domain.PullTarget
 		return nil, e
 	}
 	if remote == "" || remote == "." || !strings.HasPrefix(ref, "refs/heads/") {
-		return nil, fmt.Errorf("configure o upstream da branch antes de atualizar (use o Push explícito para uma branch nova)")
+		return nil, fmt.Errorf("configure the branch upstream before updating (use the explicit push for a new branch)")
 	}
 	changes, e := a.gitRunner.ReadChanges(ctx, p.RootPath, branch)
 	if e != nil {
 		return nil, e
 	}
 	if changes == nil || !changes.IsClean() {
-		return nil, fmt.Errorf("atualização bloqueada: preserve suas alterações com commit antes de atualizar; stage e arquivos não foram alterados")
+		return nil, fmt.Errorf("update blocked: commit your changes before updating; stage and files were not changed")
 	}
 	source, e := repo.PullSourceID(ctx, p.RootPath, remote)
 	if e != nil {
-		return nil, fmt.Errorf("não foi possível identificar a origem do pull")
+		return nil, fmt.Errorf("cannot identify the pull source")
 	}
 	ahead, behind, e := a.gitRunner.AheadBehind(ctx, p.RootPath)
 	if e != nil {
@@ -73,9 +70,9 @@ func (a *App) PullChanges(ctx context.Context, dir string, reviewed domain.PullT
 		return nil, e
 	}
 	if !samePullTarget(*target, reviewed) {
-		return nil, fmt.Errorf("origem, branch ou HEAD mudou; revise a atualização novamente")
+		return nil, fmt.Errorf("source, branch or HEAD changed; review the update again")
 	}
-	repo := a.gitRunner.(PullRepository)
+	repo := a.gitRunner
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	hash, ref, e := repo.FetchPull(ctx, target.WorkspacePath, target.Remote, target.RemoteBranch)
@@ -87,24 +84,24 @@ func (a *App) PullChanges(ctx context.Context, dir string, reviewed domain.PullT
 				if result != nil {
 					result.Output += "\nAviso: referência temporária da atualização foi preservada."
 				} else {
-					err = errors.Join(err, fmt.Errorf("limpeza da referência temporária: %w", cleanErr))
+					err = errors.Join(err, fmt.Errorf("temporary ref cleanup: %w", cleanErr))
 				}
 			}
 		}()
 	}
 	if e != nil {
-		return nil, fmt.Errorf("busca não concluída; HEAD preservado, referências remotas podem ter sido atualizadas: %w", e)
+		return nil, fmt.Errorf("fetch not completed; HEAD preserved, remote-tracking refs may have been updated: %w", e)
 	}
 	fresh, e := a.GetPullTarget(ctx, dir)
 	if e != nil {
-		return nil, fmt.Errorf("busca concluída, aplicação bloqueada: %w", e)
+		return nil, fmt.Errorf("fetch completed, apply blocked: %w", e)
 	}
 	if !samePullTarget(*fresh, reviewed) {
-		return nil, fmt.Errorf("busca concluída, mas origem/branch/HEAD mudou; nenhuma integração solicitada")
+		return nil, fmt.Errorf("fetch completed, but source/branch/HEAD changed; nothing was integrated")
 	}
 	out, e := repo.ApplyPull(ctx, target.WorkspacePath, hash)
 	if e != nil {
-		return nil, fmt.Errorf("fast-forward não confirmado; não repita sem conferir o estado (a busca já ocorreu): %w", e)
+		return nil, fmt.Errorf("fast-forward not confirmed; inspect the state before retrying (the fetch already happened): %w", e)
 	}
 	return &domain.PullResult{Target: *target, Output: out}, nil
 }

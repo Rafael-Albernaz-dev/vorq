@@ -62,13 +62,7 @@ func (r *Repository) workingMode(ctx context.Context, dir, path string, info os.
 }
 
 func (r *Repository) input(ctx context.Context, dir string, input io.Reader, env map[string]string, args ...string) (string, error) {
-	n, ok := r.Runner.(interface {
-		ExecInput(context.Context, string, io.Reader, map[string]string, ...string) (string, error)
-	})
-	if !ok {
-		return "", fmt.Errorf("native scoped Git execution unavailable")
-	}
-	return n.ExecInput(ctx, dir, input, env, args...)
+	return r.ExecInput(ctx, dir, input, env, args...)
 }
 func (r *Repository) indexFingerprint(ctx context.Context, dir string) (string, error) {
 	raw, err := r.Exec(ctx, dir, "ls-files", "--stage", "-z")

@@ -135,7 +135,7 @@ func TestAISuggestionReviewApplyCancelAndStale(t *testing.T) {
 	}
 	for _, size := range [][2]int{{140, 45}, {80, 24}, {50, 14}} {
 		m.width, m.height = size[0], size[1]
-		for _, modal := range []string{"suggest", "ai-models", "ai-send", "ai-review", "ai-error"} {
+		for _, modal := range []modalID{"suggest", "ai-models", "ai-send", "ai-review", "ai-error"} {
 			m.modal = modal
 			v := m.modalView()
 			if v == "" || !strings.Contains(v, "Voltar") {

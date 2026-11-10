@@ -8,12 +8,19 @@ import (
 
 // Repository is a consumer-owned port. Native command construction, output
 // formats and parsers belong to its adapter; use cases cannot issue raw Exec.
+//
+// Every capability the use cases need is declared here (VORQ-017): a missing
+// adapter method is a build error, never a runtime type assertion.
 type Repository interface {
 	ProjectRepository
 	WorkspaceRepository
 	CommitRepository
 	ExplorerRepository
 	PushRepository
+	PullRepository
+	BranchSwitchRepository
+	WorkflowRepository
+	AutomationRepository
 }
 type ProjectRepository interface {
 	Version(context.Context) (string, error)

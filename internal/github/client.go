@@ -41,7 +41,7 @@ func run(ctx context.Context, dir, input string, args ...string) (string, error)
 	defer cancel()
 	path, e := exec.LookPath("gh")
 	if e != nil {
-		return "", fmt.Errorf("instale GitHub CLI (gh) e execute gh auth login")
+		return "", fmt.Errorf("install GitHub CLI (gh) and run gh auth login")
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = dir
@@ -55,10 +55,10 @@ func run(ctx context.Context, dir, input string, args ...string) (string, error)
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
-		return "", fmt.Errorf("gh: %s (confira gh auth status): %w", strings.TrimSpace(stderr.String()), e)
+		return "", fmt.Errorf("gh: %s (check gh auth status): %w", strings.TrimSpace(stderr.String()), e)
 	}
 	if out.overflow {
-		return "", fmt.Errorf("resposta gh excedeu 4 MiB; reduza o limite/filtro")
+		return "", fmt.Errorf("gh response exceeded 4 MiB; reduce the limit/filter")
 	}
 	return out.String(), nil
 }
@@ -76,7 +76,7 @@ func (c *Client) List(ctx context.Context, dir, repo string, o domain.PRListOpti
 	}
 	var prs []domain.PullRequest
 	if e = json.Unmarshal([]byte(raw), &prs); e != nil {
-		return nil, fmt.Errorf("JSON de PRs inválido: %w", e)
+		return nil, fmt.Errorf("invalid PR list JSON: %w", e)
 	}
 	return prs, nil
 }
@@ -87,10 +87,10 @@ func (c *Client) View(ctx context.Context, dir, repo string, number int) (*domai
 	}
 	var pr domain.PullRequest
 	if e = json.Unmarshal([]byte(raw), &pr); e != nil {
-		return nil, fmt.Errorf("JSON de PR inválido: %w", e)
+		return nil, fmt.Errorf("invalid PR JSON: %w", e)
 	}
 	if pr.Number != number {
-		return nil, fmt.Errorf("PR retornado difere do solicitado")
+		return nil, fmt.Errorf("returned PR differs from the requested one")
 	}
 	return &pr, nil
 }
@@ -108,9 +108,17 @@ func (c *Client) DefaultBranch(ctx context.Context, dir, repo string) (string, e
 		return "", e
 	}
 	if data.DefaultBranchRef.Name == "" {
-		return "", fmt.Errorf("GitHub não informou branch padrão")
+		return "", fmt.Errorf("GitHub did not report a default branch")
 	}
 	return data.DefaultBranchRef.Name, nil
+}
+
+// Ready marks a draft PR as ready for review (gh pr ready). It never merges.
+func (c *Client) Ready(ctx context.Context, dir, repo string, number int) error {
+	if _, e := c.Run(ctx, dir, "", "pr", "ready", strconv.Itoa(number), "--repo", "github.com/"+repo); e != nil {
+		return fmt.Errorf("marking the PR ready was not confirmed; check the PR before retrying: %w", e)
+	}
+	return nil
 }
 func (c *Client) Save(ctx context.Context, dir string, d domain.PRDraft) (string, error) {
 	args := []string{"pr", "create"}
@@ -138,7 +146,7 @@ func (c *Client) Save(ctx context.Context, dir string, d domain.PRDraft) (string
 	}
 	raw, e := c.Run(ctx, dir, d.Body, args...)
 	if e != nil {
-		return "", fmt.Errorf("envio de PR não confirmado; consulte a lista antes de repetir (uma alteração parcial pode ter ocorrido): %w", e)
+		return "", fmt.Errorf("PR submission not confirmed; check the PR list before retrying (a partial change may have happened): %w", e)
 	}
 	return strings.TrimSpace(raw), nil
 }

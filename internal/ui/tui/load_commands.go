@@ -68,7 +68,7 @@ func (m *Model) loadSelected() tea.Cmd {
 	if m.selected >= 0 && m.selected < len(m.rows) {
 		group = m.rows[m.selected].group
 	}
-	if m.viewer.path == path && m.activeTab == "alteracoes" && group != m.viewerGroup {
+	if m.viewer.path == path && m.activeTab == tabChanges && group != m.viewerGroup {
 		if group == "stage" {
 			m.setViewerTab("stage")
 		} else if group == "work" {

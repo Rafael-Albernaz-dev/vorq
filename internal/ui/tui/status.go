@@ -84,7 +84,7 @@ func (m *Model) renderView() string {
 		status = "M modificado · A adicionado · D excluído · ? novo · U conflito │ Stage por arquivo"
 	}
 	notice := surface(" "+dimStyle.Render(safeText(status)), m.width, ColorPanel)
-	if m.modal == "error" || m.stale {
+	if m.modal == modalError || m.stale {
 		notice = surface(" "+redStyle.Render(safeText(status)), m.width, ColorPanel)
 	}
 	shortcuts := " b Branch  H Histórico  P PRs  o GitHub  a Alterações  e Repositório  s Stage  A: Stage tudo · U: Unstage tudo  x Descartar  c Mensagem  p Push  w Worktrees  ? Ajuda  q Sair"
@@ -118,13 +118,13 @@ func paneRule(width int) string {
 	return lipgloss.NewStyle().Foreground(ColorLine).Render(strings.Repeat("─", max(0, width)))
 }
 func (m *Model) treePane(width int) string {
-	tabs := renderTabs([]string{"Alterações", "Repositório"}, boolIndex(m.activeTab == "repositorio"), width)
+	tabs := renderTabs([]string{"Alterações", "Repositório"}, boolIndex(m.activeTab == tabRepository), width)
 	meta := fmt.Sprintf(" %d alterados · %d arquivos carregados", m.changeSummary().Total, m.inventoryCount)
 	if m.studio == nil {
 		meta = " … alterados · … arquivos"
 	}
 	legend := " [x] stage · [-] em ambos · s alternar"
-	if m.activeTab == "repositorio" {
+	if m.activeTab == tabRepository {
 		legend = " ? novo · ! ignorado · botão direito: copiar path"
 	}
 	return strings.Join([]string{tabs, surface(dimStyle.Render(meta), width, ColorPanel), m.treeView(width), surface(dimStyle.Render(legend), width, ColorPanel)}, "\n")
@@ -282,16 +282,16 @@ func fillPanel(lines []string, width, height int, bg lipgloss.Color) string {
 
 func (m *Model) modalView() string {
 	width := min(90, m.width-6)
-	if m.modal == "diff-review" || m.modal == "stage-advice" || m.modal == "stage-confirm" {
+	if m.modal == modalDiffReview || m.modal == modalStageAdvice || m.modal == modalStageConfirm {
 		width = min(140, m.width-4) // long technical text reads better wider
 	}
 	inner := width - 4
 	var title, body, help, buttons string
-	if m.modal == "workflow" {
+	if m.modal == modalWorkflow {
 		return m.workflowFormView()
 	}
 	switch m.modal {
-	case "result":
+	case modalResult:
 		title = "COMMIT LOCAL CONCLUÍDO"
 		if m.resultKind == "pull" {
 			title = "ATUALIZAÇÃO CONCLUÍDA"
@@ -302,7 +302,7 @@ func (m *Model) modalView() string {
 		body = m.resultBody
 		help = "Resultado confirmado pelo Git nativo · Enter ou Esc voltar"
 		buttons = "[Voltar]"
-	case "appearance":
+	case modalAppearance:
 		title = "APARÊNCIA"
 		body = "Paletas da Mesa de Commit · tema salvo para a próxima sessão\n\n"
 		for i, p := range studioPalettes {
@@ -317,7 +317,7 @@ func (m *Model) modalView() string {
 
 		help = "1–8 escolher · i ícones · Esc voltar"
 		buttons = "[Voltar]"
-	case "discard":
+	case modalDiscard:
 		title = "DESCARTAR ARQUIVO"
 		body = "Verificando arquivo…"
 		buttons = "[Cancelar]"
@@ -330,7 +330,7 @@ func (m *Model) modalView() string {
 			}
 		}
 		help = "Enter descartar · u preservar novo staged · Esc cancelar"
-	case "unstage":
+	case modalUnstage:
 		title = "RETIRAR ARQUIVO DO STAGE"
 		body = "O arquivo tem alterações preparadas e fora do stage.\n\nRetirar do stage remove toda a preparação deste arquivo. O conteúdo da cópia de trabalho será preservado.\n\n"
 		if n := m.selectedNode(); n != nil {
@@ -338,38 +338,38 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter retirar do stage · Esc voltar"
 		buttons = "[Confirmar]  [Voltar]"
-	case "help":
+	case modalHelp:
 		title = "ATALHOS · MESA DE COMMIT"
 		body = "a Alterações · e Repositório (inventário completo)\n1 Trabalho: índice → working copy\n2 Stage: HEAD → índice · Tab: Arquivo completo\nShift+Tab: Árvore → Viewer → Mensagem\nÁrvore: ↑/↓ ou j/k · Enter/Espaço expande pastas\nViewer: ↑/↓ ou j/k · PgUp/PgDown · ←/→ horizontal\ns: stage/unstage do arquivo · c: painel de mensagem\nA: Stage tudo · U: Unstage tudo\nx/d: descartar arquivo (sempre confirmar)\nMensagem: Enter edita · Tab alterna campos\nDescrição: Enter insere uma nova linha\nCtrl+G: sugerir mensagem · Ctrl+S: revisar commit\np: push explícito · w: worktrees\nf ou [Tela cheia]: arquivo/diff em tela cheia (z quebra linhas, Esc sai)\nr ou [↻ Atualizar]: reler o workspace (sem atualização automática)\nPainel direito: abas Commit/Git/PRs/Worktrees clicáveis\nSetas da branch: ↑ revisar push · ↓ revisar atualização ff-only\nb: nova branch · H: histórico · P: PRs · o: abrir GitHub\ni: ícones Emoji/texto · t: aparência · Esc: voltar/cancelar\nEm campos de texto, letras são texto, inclusive q.\nq / Ctrl+C: sair (Ctrl+C também durante edição)"
 		help = "Esc fecha · PgUp/PgDown ou roda rola"
 		buttons = "[Voltar]"
-	case "suggest":
+	case modalSuggest:
 		title = "SUGERIR CONVENTIONAL COMMIT"
 		body = "Sugerir com IA (inglês):\n" + providerMenu + "\n\nRegras locais — escolha o tipo:\n[1] feat   [2] fix    [3] chore    [4] refactor\n[5] docs   [6] test   [7] style    [8] perf\n\nIA: prévia antes de substituir o rascunho.\nRegras: preservam a descrição existente."
 		help = "c/g/a IA · 1–8 regras locais · Esc cancelar"
-		if m.aiTask != "" && m.aiTask != "suggest" {
+		if m.aiTask != taskNone && m.aiTask != taskSuggest {
 			body = "Escolha o provedor:\n" + providerMenu + "\n\nDepois escolha o modelo. Inglês por padrão."
 			help = "c/g/a provedor · Esc voltar"
 		}
 		buttons = "[Voltar]"
-	case "ai-send":
+	case modalAiSend:
 		title = "SUGERIR COM IA · " + m.aiProvider
 		body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar somente o diff staged ao provedor escolhido.\n" + fmt.Sprintf("Inglês · até %d KiB · timeout de %d min.", app.MaxAIDiffBytes/1024, int(app.AISuggestTimeout.Minutes())) + "\n\nO conteúdo sai desta máquina e usa a cota da assinatura.\nA resposta será revisada antes de substituir resumo e descrição.\nNenhum commit ou push será executado."
 		if isWorkingAnalysis(m.aiTask) {
 			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nAnalisar versões de trabalho das mudanças rastreadas e novos arquivos elegíveis, incluindo fora do stage.\nIgnorados, binários, links e arquivos grandes serão listados como excluídos.\n\n" + fmt.Sprintf("Até %d MiB por análise e 1 MiB por arquivo; sem truncamento silencioso.", app.AnalysisLimit/(1024*1024)) + "\nO conteúdo sai desta máquina e usa a cota da assinatura.\nNenhum stage ou commit até aprovar o plano."
 		}
-		if m.aiTask == "pr" {
+		if m.aiTask == taskPr {
 			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar ao provedor os commits e o diff da branch em relação à base (ponto de divergência, referência local, sem fetch), o template de PR e os documentos de contexto versionados.\n" + fmt.Sprintf("Inglês · até %d MiB · arquivos acima de 1 MiB omitidos com aviso.", app.AnalysisLimit/(1024*1024)) + "\n\nA IA só preenche título e descrição do formulário. Nada é enviado ao GitHub sem a revisão e confirmação do PR."
 		}
-		if m.aiTask == "stage" {
+		if m.aiTask == taskStage {
 			body += "\n\nTambém envia documentos de contexto versionados (README, CONTRIBUTING, docs/*.md, templates .github, convenções de commit); documentos ignorados/privados nunca são enviados. O stage só muda depois de [Aplicar] e confirmar."
 		}
-		if m.changeSummary().Staged == 0 && !isWorkingAnalysis(m.aiTask) && m.aiTask != "pr" {
+		if m.changeSummary().Staged == 0 && !isWorkingAnalysis(m.aiTask) && m.aiTask != taskPr {
 			body = "Nenhum arquivo no stage.\nVolte e use s em um arquivo ou A para preparar as mudanças.\n\nModelo escolhido: " + safeText(m.aiModelLabel()) + "\nNada será enviado sem arquivos no stage."
 		}
 		if m.busy != "" {
 			body = "Analisando somente o staged…\nEsc cancela e preserva seu rascunho."
-			if m.aiTask == "pr" {
+			if m.aiTask == taskPr {
 				body = "Analisando commits e diff da branch…\nEsc cancela e volta ao formulário do PR."
 			}
 			if isWorkingAnalysis(m.aiTask) {
@@ -378,7 +378,7 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter enviar · Esc cancelar"
 		buttons = "[Confirmar]  [Voltar]"
-	case "ai-models":
+	case modalAiModels:
 		title = "ESCOLHER MODELO · " + m.aiProvider
 		body = m.aiModelsBody()
 		if m.busy != "" {
@@ -386,7 +386,7 @@ func (m *Model) modalView() string {
 		}
 		help = "↑/↓ ou clique escolher · Enter revisar envio · Esc voltar"
 		buttons = "[Revisar] [Voltar]"
-	case "ai-review":
+	case modalAiReview:
 		title = "REVISAR SUGESTÃO · " + m.aiProvider
 		if m.aiProposal != nil {
 			body = safeText(m.aiProposal.Proposal.Message())
@@ -394,29 +394,34 @@ func (m *Model) modalView() string {
 		body += "\n\nUsar preenche o editor. Commit abre a revisão local antes de confirmar.\nAmbos substituem resumo e descrição do rascunho."
 		help = "Enter usar · v revisar commit · o opções · Esc voltar"
 		buttons = "[Usar] [Commit] [Mais] [Voltar]"
-	case "ai-error":
+	case modalAiError:
 		title = "SUGESTÃO NÃO GERADA · " + m.aiProvider
 		body = safeText(m.aiError) + "\n\nSeu rascunho foi preservado.\nAbra Opções para repetir, escolher outro provedor ou usar regras locais."
 		help = "o opções · r repetir · c/g/a provedor · l regras · Esc voltar"
 		buttons = "[Opções] [Voltar]"
-	case "ai-options":
+	case modalAiOptions:
 		title = "OPÇÕES DA SUGESTÃO"
 		body = "[r] Tentar novamente\n[c] Codex\n[g] Gemini (Antigravity)\n[a] Claude Code\n[l] Regras locais\n\nO rascunho atual permanece preservado."
 		help = "Clique ou r/c/g/a/l escolher · Esc fechar"
 		buttons = "[Voltar]"
-	case "stage-advice":
+	case modalPRReady:
+		title = "PR PRONTO PARA REVISÃO"
+		body = m.prReadyBody()
+		help = "Enter confirmar · Esc cancelar"
+		buttons = "[Confirmar] [Voltar]"
+	case modalStageAdvice:
 		title = "PRÓXIMO COMMIT · RECOMENDAÇÃO DA IA"
 		help = "Enter/a aplicar · PgUp/PgDown/roda rolar · Esc voltar"
 		buttons = applyButton + " [Voltar]"
-	case "stage-confirm":
+	case modalStageConfirm:
 		title = "CONFIRMAR STAGE RECOMENDADO"
 		help = "Enter confirmar · Esc cancelar"
 		buttons = "[Confirmar] [Voltar]"
-	case "diff-review":
+	case modalDiffReview:
 		title = "REVISÃO DO DIFF · IA"
 		help = "o organizar commits · PgUp/PgDown/roda rolar · Esc voltar"
 		buttons = "[Organizar] [Voltar]"
-	case "plan":
+	case modalPlan:
 		title = "PLANO DE COMMITS · REVISAR"
 		body = m.planBody()
 		help = "↑/↓ grupo · e editar · d diff · Enter executar · Esc voltar"
@@ -424,23 +429,23 @@ func (m *Model) modalView() string {
 		if inner < 43 {
 			buttons = "[OK] [Editar] [Diff] [Voltar]"
 		}
-	case "plan-diff":
+	case modalPlanDiff:
 		title = "DIFF DO GRUPO · CONTEÚDO REVISADO"
 		body = m.planDiffBody()
 		help = "PgUp/PgDown rolar · Esc voltar"
 		buttons = "[Voltar]"
-	case "plan-edit":
+	case modalPlanEdit:
 		title = "EDITAR PLANO · " + m.planEditKind
 		instructions := map[string]string{"message": "Mensagem: primeira linha título, demais descrição. Ctrl+U limpa.", "move": "Informe ID e grupo destino. Exemplo: F0001 2", "exclude": "Informe ID a excluir. Arquivo/stage serão preservados.", "order": "Informe o número da posição destino do grupo."}
 		body = instructions[m.planEditKind] + "\n\n" + safeText(m.planEditValue) + "▏"
 		help = "Ctrl+S salvar · Esc cancelar"
 		buttons = "[Salvar] [Cancelar]"
-	case "plan-execute":
+	case modalPlanExecute:
 		title = "APROVAR E EXECUTAR PLANO"
 		body = m.planBody() + "\n\nConfirmar cria a sequência restante de commits locais.\nSe uma etapa falhar, anteriores podem existir; o progresso será salvo.\nSem push. Nenhum stash, descarte ou reescrita do histórico."
 		help = "Enter confirmar sequência · Esc cancelar"
 		buttons = "[Confirmar] [Voltar]"
-	case "commit":
+	case modalCommit:
 		title = "REVISAR COMMIT LOCAL"
 		if m.commitPhase == "loading" {
 			body = "Inspecionando os arquivos preparados…"
@@ -450,7 +455,7 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar · e editar · Esc cancelar sem unstage"
 		buttons = "[Confirmar]  [Editar]  [Voltar]"
-	case "branches":
+	case modalBranches:
 		title = "TROCAR BRANCH · BRANCHES LOCAIS"
 		body = "Carregando branches…"
 		if m.busy == "" {
@@ -462,7 +467,7 @@ func (m *Model) modalView() string {
 		}
 		help = "Clique ou ↑/↓ escolher · Enter revisar · Esc voltar"
 		buttons = "[Revisar] [Voltar]"
-	case "switch-branch":
+	case modalSwitchBranch:
 		title = "REVISAR TROCA DE BRANCH"
 		body = "Verificando destino e estado local…"
 		if p := m.branchSwitchPlan; p != nil {
@@ -470,7 +475,7 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar troca · Esc cancelar"
 		buttons = "[Confirmar] [Voltar]"
-	case "pull":
+	case modalPull:
 		title = "ATUALIZAR BRANCH · FAST-FORWARD"
 		body = "Inspecionando origem e estado local…"
 		if m.pullTarget != nil {
@@ -479,7 +484,7 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar busca e atualização · Esc cancelar"
 		buttons = "[Confirmar] [Voltar]"
-	case "push":
+	case modalPush:
 		title = "PUSH EXPLÍCITO"
 		if m.pushTarget == nil {
 			body = "Inspecionando destino…"
@@ -498,7 +503,7 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar push · Esc cancelar"
 		buttons = "[Confirmar]  [Voltar]"
-	case "worktrees":
+	case modalWorktrees:
 		title = "WORKTREES · TROCAR WORKSPACE"
 		if len(m.worktrees) == 0 {
 			body = "Carregando worktrees…"
@@ -508,7 +513,7 @@ func (m *Model) modalView() string {
 		}
 		help = "↑/↓ escolher · Enter abrir · Esc cancelar"
 		buttons = "[Abrir]  [Voltar]"
-	case "error":
+	case modalError:
 		title = "OPERAÇÃO NÃO CONCLUÍDA"
 		if strings.HasPrefix(m.lastError, "Commit criado;") {
 			title = "COMMIT CRIADO · AVISO DE LEITURA"
@@ -531,13 +536,13 @@ func (m *Model) modalView() string {
 		}
 	}
 	bodyLines := strings.Split(ansi.Wrap(safeText(body), inner, ""), "\n")
-	styled := (m.modal == "diff-review" && m.diffReview != nil) || ((m.modal == "stage-advice" || m.modal == "stage-confirm") && m.stageAdvice != nil)
+	styled := (m.modal == modalDiffReview && m.diffReview != nil) || ((m.modal == modalStageAdvice || m.modal == modalStageConfirm) && m.stageAdvice != nil)
 	if styled {
 		// sanitised and wrapped per piece
 		switch m.modal {
-		case "diff-review":
+		case modalDiffReview:
 			bodyLines = m.diffReviewLines(inner)
-		case "stage-advice":
+		case modalStageAdvice:
 			bodyLines = m.stageAdviceLines(inner)
 		default:
 			bodyLines = m.stageConfirmLines(inner)

@@ -101,7 +101,7 @@ func (m *Model) saveWorkspaceContext() {
 func (m *Model) restoreWorkspaceContext(dir string) {
 	c, ok := m.contexts[dir]
 	if !ok {
-		c = workspaceContext{activeTab: "alteracoes", viewerTab: "trabalho", focusPane: "tree", expanded: map[string]bool{}, positions: map[string]treePosition{}}
+		c = workspaceContext{activeTab: tabChanges, viewerTab: "trabalho", focusPane: "tree", expanded: map[string]bool{}, positions: map[treeTab]treePosition{}}
 	}
 	m.commitSummary, m.commitDescription = c.draft.summary, c.draft.description
 	m.summaryCursor, m.descriptionCursor = len([]rune(c.draft.summary)), len([]rune(c.draft.description))

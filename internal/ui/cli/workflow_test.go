@@ -99,3 +99,28 @@ func TestPRCLIAIDraftKeepsConfirmationAndOverrides(t *testing.T) {
 		t.Fatalf("override failed: %+v", stub.draft)
 	}
 }
+
+func (s *workflowCLIStub) GetRepositoryLink(context.Context, string) (*domain.RepositoryLink, error) {
+	return &domain.RepositoryLink{Remote: "origin", Slug: "owner/repo"}, nil
+}
+func (s *workflowCLIStub) MarkPullRequestReady(context.Context, string, int) error {
+	s.saves++
+	return nil
+}
+
+func TestPRReadyCLIConfirms(t *testing.T) {
+	for input, want := range map[string]int{"n\n": 0, "y\n": 1} {
+		stub := &workflowCLIStub{}
+		c := newPRReadyCmd(stub)
+		var out bytes.Buffer
+		c.SetIn(strings.NewReader(input))
+		c.SetOut(&out)
+		c.SetArgs([]string{"7"})
+		if err := c.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if stub.saves != want || !strings.Contains(out.String(), "owner/repo") {
+			t.Fatalf("input=%q ready=%d out=%s", input, stub.saves, out.String())
+		}
+	}
+}

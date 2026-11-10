@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -63,8 +64,11 @@ func validateProvider(provider, model string) error {
 var aiSubjectPattern = regexp.MustCompile(`^(feat|fix|chore|refactor|docs|test|style|perf)(\([^():\r\n]+\))?!?: .+$`)
 var aiModelPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,99}$`)
 
+// AIProvider is every capability the AI use cases need (VORQ-017).
 type AIProvider interface {
 	Suggest(context.Context, domain.AIRequest) (*domain.CommitProposal, error)
+	Analyze(context.Context, domain.AnalysisRequest) (json.RawMessage, error)
+	ListModels(context.Context, string) ([]domain.AIModel, error)
 }
 
 type AISuggestionService interface {
@@ -77,15 +81,12 @@ func (a *App) ListAIModels(ctx context.Context, provider string) ([]domain.AIMod
 	if err := validateProvider(provider, ""); err != nil {
 		return nil, err
 	}
-	lister, ok := a.ai.(interface {
-		ListModels(context.Context, string) ([]domain.AIModel, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("model catalog unavailable")
+	if a.ai == nil {
+		return nil, fmt.Errorf("AI provider unavailable")
 	}
 	ctx, cancel := context.WithTimeout(ctx, AIModelsTimeout)
 	defer cancel()
-	return lister.ListModels(ctx, provider)
+	return a.ai.ListModels(ctx, provider)
 }
 
 func (a *App) SetAIProvider(provider AIProvider) { a.ai = provider }

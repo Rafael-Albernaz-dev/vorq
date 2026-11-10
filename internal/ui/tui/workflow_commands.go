@@ -236,7 +236,7 @@ func (m *Model) inspectPR(edit bool) tea.Cmd {
 	if edit {
 		ctx, cancel, id := m.workflowContext()
 		m.busy = "Lendo PR para edição…"
-		m.modal = "workflow"
+		m.modal = modalWorkflow
 		m.fields = nil
 		return func() tea.Msg {
 			defer cancel()

@@ -35,13 +35,7 @@ type AutomationService interface {
 }
 
 func sha(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
-func (a *App) automation() (AutomationRepository, error) {
-	r, ok := a.gitRunner.(AutomationRepository)
-	if !ok {
-		return nil, fmt.Errorf("native automation adapter unavailable")
-	}
-	return r, nil
-}
+
 func (a *App) analysis(ctx context.Context, dir, provider, model, task string) (*domain.ChangeSnapshot, json.RawMessage, error) {
 	return a.analysisWithContext(ctx, dir, provider, model, task, nil)
 }
@@ -52,16 +46,11 @@ func (a *App) analysisWithContext(ctx context.Context, dir, provider, model, tas
 	if err := validateProvider(provider, model); err != nil {
 		return nil, nil, err
 	}
-	r, err := a.automation()
-	if err != nil {
-		return nil, nil, err
-	}
-	p, ok := a.ai.(interface {
-		Analyze(context.Context, domain.AnalysisRequest) (json.RawMessage, error)
-	})
-	if !ok {
+	r := a.gitRunner
+	if a.ai == nil {
 		return nil, nil, fmt.Errorf("analysis provider unavailable")
 	}
+	p := a.ai
 	ctx, cancel := context.WithTimeout(ctx, AnalysisTimeout)
 	defer cancel()
 	snapshot, err := r.CaptureSnapshot(ctx, dir)
@@ -428,10 +417,7 @@ func (a *App) ExecuteCommitPlan(ctx context.Context, dir string, reviewed *domai
 	if strings.HasPrefix(p.Error, "INSPECT:") {
 		return &p, fmt.Errorf("inspect the previously created commit/index before making a new plan")
 	}
-	r, err := a.automation()
-	if err != nil {
-		return &p, err
-	}
+	r := a.gitRunner
 	p.Error = ""
 	for i := len(p.Completed); i < len(p.Commits); i++ {
 		if err = r.ValidateSnapshot(ctx, p.Snapshot, p.ExpectedHead, p.ExpectedIndex); err != nil {

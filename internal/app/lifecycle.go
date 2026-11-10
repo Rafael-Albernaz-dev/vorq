@@ -101,8 +101,8 @@ func (a *App) SpawnWorkspace(ctx context.Context, currentDir string, opts SpawnO
 // and finally the current HEAD. It never fetches.
 func (a *App) defaultBase(ctx context.Context, root string) (string, error) {
 	var candidates []string
-	if r, ok := a.gitRunner.(WorkflowRepository); ok {
-		if name, err := r.DefaultBranch(ctx, root); err == nil && name != "" {
+	if link, err := a.GetRepositoryLink(ctx, root); err == nil && link.Remote != "" {
+		if name, err := a.gitRunner.RemoteDefaultBranch(ctx, root, link.Remote); err == nil && name != "" {
 			candidates = append(candidates, name)
 		}
 	}

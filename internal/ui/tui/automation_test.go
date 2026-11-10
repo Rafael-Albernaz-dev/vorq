@@ -16,6 +16,10 @@ import (
 
 type automationAI struct{ calls int }
 
+func (*automationAI) ListModels(context.Context, string) ([]domain.AIModel, error) {
+	return nil, nil
+}
+
 func (p *automationAI) Suggest(context.Context, domain.AIRequest) (*domain.CommitProposal, error) {
 	panic("unexpected suggestion")
 }
@@ -107,7 +111,7 @@ func TestAutomationTUIReviewEditAndExplicitExecution(t *testing.T) {
 	}
 	for _, size := range [][2]int{{160, 42}, {80, 24}, {50, 14}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		for _, modal := range []string{"plan", "plan-diff", "plan-edit", "plan-execute", "diff-review"} {
+		for _, modal := range []modalID{"plan", "plan-diff", "plan-edit", "plan-execute", "diff-review"} {
 			m.modal = modal
 			if !strings.Contains(m.modalView(), "Voltar") && !strings.Contains(m.modalView(), "Cancelar") {
 				t.Fatalf("no exit: %s %v", modal, size)

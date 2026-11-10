@@ -35,7 +35,7 @@ func (m *Model) rememberTree() {
 	m.positions[m.activeTab] = p
 }
 
-func (m *Model) switchTree(tab string) {
+func (m *Model) switchTree(tab treeTab) {
 	if m.activeTab == tab {
 		return
 	}
@@ -45,7 +45,7 @@ func (m *Model) switchTree(tab string) {
 	if p.path == "" {
 		p = m.positions[otherTree(tab)]
 	}
-	if tab == "repositorio" {
+	if tab == tabRepository {
 		for parent := path.Dir(p.path); parent != "." && parent != ""; parent = path.Dir(parent) {
 			m.expanded["/"+parent] = true
 		}
@@ -55,11 +55,11 @@ func (m *Model) switchTree(tab string) {
 	m.treeOffset = p.offset
 	m.restoreSelection(p)
 }
-func otherTree(tab string) string {
-	if tab == "alteracoes" {
-		return "repositorio"
+func otherTree(tab treeTab) treeTab {
+	if tab == tabChanges {
+		return tabRepository
 	}
-	return "alteracoes"
+	return tabChanges
 }
 
 func (m *Model) restoreSelection(p treePosition) {
@@ -99,7 +99,7 @@ func (m *Model) rebuildTree() {
 			}
 		}
 	}
-	if m.activeTab == "repositorio" {
+	if m.activeTab == tabRepository {
 		for _, node := range m.studio.Root.Children {
 			walk(node, 0, "")
 		}
@@ -320,7 +320,7 @@ func (m *Model) treeView(width int) string {
 					text = "Lendo inventário…"
 				case m.studio == nil || m.stale:
 					text = "Inventário indisponível · r para atualizar"
-				case m.activeTab == "alteracoes":
+				case m.activeTab == tabChanges:
 					text = "✓ Repositório limpo"
 				default:
 					text = "Repositório sem arquivos"
@@ -345,7 +345,7 @@ func (m *Model) treeView(width int) string {
 		var label string
 		if node.IsDir {
 			name := displayName(node.Name)
-			if m.activeTab == "repositorio" {
+			if m.activeTab == tabRepository {
 				if node.Tracking == "ignored" {
 					name = dimStyle.Render("! " + name)
 				}
@@ -370,7 +370,7 @@ func (m *Model) treeView(width int) string {
 			}
 			name := displayName(node.Name)
 			badge := statusBadge(node.Status)
-			if m.activeTab == "repositorio" {
+			if m.activeTab == tabRepository {
 				if node.Tracking == "untracked" {
 					name = cyanStyle.Render(name)
 				}

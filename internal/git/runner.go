@@ -18,6 +18,8 @@ import (
 // Runner defines the interface for interacting with the native Git binary.
 type Runner interface {
 	Exec(ctx context.Context, dir string, args ...string) (string, error)
+	ExecInput(ctx context.Context, dir string, input io.Reader, env map[string]string, args ...string) (string, error)
+	CommitPreview(ctx context.Context, dir, hash string) (string, error)
 	Version(ctx context.Context) (string, error)
 	ListWorktrees(ctx context.Context, repoDir string) (string, error)
 	Status(ctx context.Context, wsDir string) (string, error)

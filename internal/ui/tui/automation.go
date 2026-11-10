@@ -22,18 +22,18 @@ type automationMsg struct {
 	err    error
 }
 
-func (m *Model) openAIAction(task string) tea.Cmd {
+func (m *Model) openAIAction(task aiTaskID) tea.Cmd {
 	if !m.canAct() {
 		return nil
 	}
 	m.aiTask = task
 	m.rightTab = "ai"
 	m.commitEditing = false
-	if task != "configure" && m.aiProvider != "" && len(m.aiModels) > 0 {
-		m.modal, m.modalScroll = "ai-send", 0
+	if task != taskConfigure && m.aiProvider != "" && len(m.aiModels) > 0 {
+		m.modal, m.modalScroll = modalAiSend, 0
 		return nil
 	}
-	m.modal, m.modalScroll = "suggest", 0
+	m.modal, m.modalScroll = modalSuggest, 0
 	return nil
 }
 func (m *Model) generateAutomation() tea.Cmd {
@@ -43,10 +43,10 @@ func (m *Model) generateAutomation() tea.Cmd {
 	ctx, cancel := m.beginDialog(app.AnalysisTimeout + uiMargin)
 	return func() tea.Msg {
 		defer cancel()
-		msg := automationMsg{id: id, kind: task}
-		if task == "review" {
+		msg := automationMsg{id: id, kind: string(task)}
+		if task == taskReview {
 			msg.review, msg.err = core.ReviewDiffAI(ctx, dir, provider, model)
-		} else if task == "stage" {
+		} else if task == taskStage {
 			msg.advice, msg.err = core.StageAdviceAI(ctx, dir, provider, model)
 		} else {
 			msg.plan, msg.err = core.PlanCommitsAI(ctx, dir, provider, model)
@@ -60,7 +60,7 @@ func (m *Model) loadAutomationPlan() tea.Cmd {
 	}
 	m.dialogID++
 	id, core, dir := m.dialogID, m.core, m.dir
-	m.modal = "plan"
+	m.modal = modalPlan
 	m.busy = "Carregando plano salvo…"
 	ctx, cancel := m.beginDialog(10 * time.Second)
 	return func() tea.Msg {
@@ -77,16 +77,16 @@ func (m *Model) receiveAutomation(msg automationMsg) tea.Cmd {
 	m.mutating = false
 	if msg.review != nil {
 		m.diffReview = msg.review
-		m.modal, m.modalScroll = "diff-review", 0
+		m.modal, m.modalScroll = modalDiffReview, 0
 	}
 	if msg.advice != nil {
 		m.stageAdvice = msg.advice
-		m.modal, m.modalScroll = "stage-advice", 0
+		m.modal, m.modalScroll = modalStageAdvice, 0
 	}
 	if msg.plan != nil {
 		m.commitPlan = msg.plan
 		m.planGroup = min(m.planGroup, max(0, len(msg.plan.Commits)-1))
-		m.modal, m.modalScroll = "plan", 0
+		m.modal, m.modalScroll = modalPlan, 0
 	}
 	if msg.err != nil {
 		var needs *domain.TerminalRequiredError
@@ -127,9 +127,9 @@ func (m *Model) planOp() operation {
 }
 func (m *Model) automationKey(key tea.KeyMsg) tea.Cmd {
 	s := key.String()
-	if m.modal == "plan-edit" {
+	if m.modal == modalPlanEdit {
 		if s == "esc" {
-			m.modal = "plan"
+			m.modal = modalPlan
 			return nil
 		}
 		if m.busy != "" {
@@ -173,19 +173,19 @@ func (m *Model) automationKey(key tea.KeyMsg) tea.Cmd {
 	if m.busy != "" {
 		return nil
 	}
-	if m.modal == "plan-execute" {
+	if m.modal == modalPlanExecute {
 		if s == "enter" {
 			return m.executeAutomationPlan()
 		}
 		return nil
 	}
-	if m.modal == "diff-review" {
+	if m.modal == modalDiffReview {
 		if s == "o" {
-			return m.openAIAction("plan")
+			return m.openAIAction(taskPlan)
 		}
 		return nil
 	}
-	if m.modal != "plan" || m.commitPlan == nil {
+	if m.modal != modalPlan || m.commitPlan == nil {
 		return nil
 	}
 	switch s {
@@ -196,9 +196,9 @@ func (m *Model) automationKey(key tea.KeyMsg) tea.Cmd {
 		m.planGroup = min(len(m.commitPlan.Commits)-1, m.planGroup+1)
 		m.modalScroll = 0
 	case "enter":
-		m.modal, m.modalScroll = "plan-execute", 0
+		m.modal, m.modalScroll = modalPlanExecute, 0
 	case "d":
-		m.modal, m.modalScroll = "plan-diff", 0
+		m.modal, m.modalScroll = modalPlanDiff, 0
 	case "e", "m", "x", "r":
 		if len(m.commitPlan.Completed) > 0 {
 			m.notice = "Execução iniciada: retome ou gere novo plano das mudanças restantes."
@@ -210,7 +210,7 @@ func (m *Model) automationKey(key tea.KeyMsg) tea.Cmd {
 			c := m.commitPlan.Commits[m.planGroup]
 			m.planEditValue = c.Subject + "\n\n" + c.Body
 		}
-		m.modal, m.modalScroll = "plan-edit", 0
+		m.modal, m.modalScroll = modalPlanEdit, 0
 	}
 	return nil
 }

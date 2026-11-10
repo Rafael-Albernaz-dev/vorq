@@ -53,12 +53,13 @@ type workspaceMsg struct {
 type tickMsg time.Time
 type commitDraft struct{ summary, description string }
 type workspaceContext struct {
-	draft                                                     commitDraft
-	activeTab, viewerTab, focusPane, lastDiffTab, viewerGroup string
-	expanded                                                  map[string]bool
-	positions                                                 map[string]treePosition
-	selected, treeOffset                                      int
-	viewer                                                    viewerState
+	draft                                          commitDraft
+	viewerTab, focusPane, lastDiffTab, viewerGroup string
+	activeTab                                      treeTab
+	expanded                                       map[string]bool
+	positions                                      map[treeTab]treePosition
+	selected, treeOffset                           int
+	viewer                                         viewerState
 }
 
 type pullTargetMsg struct {

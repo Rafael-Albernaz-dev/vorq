@@ -17,22 +17,23 @@ type operationsState struct {
 	busy, notice                         string
 }
 type navigationState struct {
-	rightTab                                                  string
-	rightActionIndex                                          int
-	viewerGroup, activeTab, viewerTab, focusPane, lastDiffTab string
-	studio                                                    *domain.WorkspaceTree
-	snapshotSummary                                           domain.ChangeSummary
-	rows                                                      []treeRow
-	expanded                                                  map[string]bool
-	positions                                                 map[string]treePosition
-	pendingSelection                                          treePosition
-	fullscreen, viewerWrap                                    bool
-	fullscreenPath                                            string
-	selected, treeOffset, inventoryCount                      int
-	viewer                                                    viewerState
+	rightTab                                       string
+	rightActionIndex                               int
+	viewerGroup, viewerTab, focusPane, lastDiffTab string
+	activeTab                                      treeTab
+	studio                                         *domain.WorkspaceTree
+	snapshotSummary                                domain.ChangeSummary
+	rows                                           []treeRow
+	expanded                                       map[string]bool
+	positions                                      map[treeTab]treePosition
+	pendingSelection                               treePosition
+	fullscreen, viewerWrap                         bool
+	fullscreenPath                                 string
+	selected, treeOffset, inventoryCount           int
+	viewer                                         viewerState
 }
 type commitState struct {
-	aiTask                                                     string
+	aiTask                                                     aiTaskID
 	commitPlan                                                 *domain.CommitPlan
 	diffReview                                                 *domain.DiffReview
 	stageAdvice                                                *domain.StageAdvice
@@ -56,18 +57,19 @@ type commitState struct {
 	suggested                                                  bool
 }
 type dialogState struct {
-	localBranches                            []domain.LocalBranch
-	branchIndex                              int
-	branchSwitchPlan                         *domain.BranchSwitchPlan
-	resultKind, resultBody, modal, lastError string
-	terminalRetryKind                        string
-	lastPRDraft                              *domain.PRDraft
-	modalScroll                              int
-	discardPlan                              *domain.DiscardPlan
-	pushTarget                               *domain.PushTarget
-	pullTarget                               *domain.PullTarget
-	worktrees                                []*domain.Workspace
-	worktreeIndex                            int
+	localBranches                     []domain.LocalBranch
+	branchIndex                       int
+	branchSwitchPlan                  *domain.BranchSwitchPlan
+	resultKind, resultBody, lastError string
+	modal                             modalID
+	terminalRetryKind                 string
+	lastPRDraft                       *domain.PRDraft
+	modalScroll                       int
+	discardPlan                       *domain.DiscardPlan
+	pushTarget                        *domain.PushTarget
+	pullTarget                        *domain.PullTarget
+	worktrees                         []*domain.Workspace
+	worktreeIndex                     int
 }
 type appearanceState struct {
 	width, height, frame, themeIndex int

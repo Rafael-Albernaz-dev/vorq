@@ -82,6 +82,10 @@ func (m *Model) workflowKey(k tea.KeyMsg) tea.Cmd {
 		if m.screen == "prs" {
 			return m.inspectPR(true)
 		}
+	case "y":
+		if m.screen == "prs" {
+			return m.openPRReady()
+		}
 	case "enter":
 		if m.screen == "prs" {
 			return m.inspectPR(false)
@@ -110,9 +114,13 @@ func (m *Model) workflowView() string {
 	if m.screen == "prs" {
 		selected, offset = m.prIndex, m.prOffset
 		title = fmt.Sprintf("PULL REQUESTS · %s · %d/%d", m.prOptions.State, len(m.prs), m.prOptions.Limit)
-		help = "↑/↓ selecionar · Enter detalhes · c criar · e editar · / filtros · n ampliar limite · PgUp/PgDn detalhes · Esc voltar"
+		help = "↑/↓ selecionar · Enter detalhes · c criar · e editar · y pronto · / filtros · n ampliar limite · PgUp/PgDn detalhes · Esc voltar"
 		for _, p := range m.prs {
-			rows = append(rows, fmt.Sprintf("#%d [%s] %s · %s → %s", p.Number, p.State, safeText(p.Title), safeText(p.Head), safeText(p.Base)))
+			state := p.State
+			if p.Draft {
+				state += " · DRAFT"
+			}
+			rows = append(rows, fmt.Sprintf("#%d [%s] %s · %s → %s", p.Number, state, safeText(p.Title), safeText(p.Head), safeText(p.Base)))
 		}
 	}
 	h := max(1, m.height-4)
@@ -188,7 +196,7 @@ func (m *Model) workflowMouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Y == m.height-1 {
 		line := strings.Split(m.workflowView(), "\n")
 		footer := line[len(line)-1]
-		for label, key := range map[string]string{"P PRs": "P", "v PRs do commit": "v", "c criar": "c", "e editar": "e", "n próxima": "n", "n ampliar limite": "n", "[ anterior": "[", "/ filtros": "/", "r atualizar": "r"} {
+		for label, key := range map[string]string{"P PRs": "P", "v PRs do commit": "v", "c criar": "c", "e editar": "e", "y pronto": "y", "n próxima": "n", "n ampliar limite": "n", "[ anterior": "[", "/ filtros": "/", "r atualizar": "r"} {
 			if mouseLabelHit(footer, label, msg.X) {
 				return m.workflowKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 			}

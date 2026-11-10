@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -14,6 +15,15 @@ type aiFunc func(context.Context, domain.AIRequest) (*domain.CommitProposal, err
 
 func (f aiFunc) Suggest(ctx context.Context, r domain.AIRequest) (*domain.CommitProposal, error) {
 	return f(ctx, r)
+}
+
+// Neutral capabilities so aiFunc satisfies app.AIProvider; fakes that need
+// analysis embed aiFunc and override Analyze.
+func (aiFunc) Analyze(context.Context, domain.AnalysisRequest) (json.RawMessage, error) {
+	return nil, errors.New("analysis not supported by this fake")
+}
+func (aiFunc) ListModels(context.Context, string) ([]domain.AIModel, error) {
+	return nil, errors.New("model catalog not supported by this fake")
 }
 
 func TestAISuggestionOnlyStagedAndRevalidates(t *testing.T) {

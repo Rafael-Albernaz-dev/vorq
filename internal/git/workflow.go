@@ -52,99 +52,6 @@ func WebRepositoryURL(raw string) (string, string) {
 	}
 	return "https://" + host + "/" + path, path
 }
-func (r *Repository) RepositoryIdentity(ctx context.Context, dir string) (*domain.RepositoryLink, error) {
-	remotes, e := r.Remotes(ctx, dir)
-	if e != nil {
-		return nil, e
-	}
-	link := &domain.RepositoryLink{}
-	if len(remotes) == 0 {
-		return link, nil
-	}
-	branch, detached, e := r.Branch(ctx, dir)
-	if e != nil {
-		return nil, e
-	}
-	exists := false
-	if !detached {
-		exists, e = r.BranchExists(ctx, dir, branch)
-		if e != nil {
-			return nil, e
-		}
-	}
-	if exists {
-		remote, _, e := r.UpstreamTarget(ctx, dir, branch)
-		if e != nil {
-			return nil, e
-		}
-		for _, name := range remotes {
-			if name == remote {
-				link.Remote = name
-			}
-		}
-	}
-	if link.Remote == "" {
-		for _, name := range remotes {
-			if name == "origin" {
-				link.Remote = name
-			}
-		}
-	}
-	if link.Remote == "" && len(remotes) == 1 {
-		link.Remote = remotes[0]
-	}
-	if link.Remote == "" {
-		return link, nil
-	}
-	raw, e := r.Exec(ctx, dir, "remote", "get-url", "--", link.Remote)
-	if e != nil {
-		return nil, fmt.Errorf("não foi possível ler o remote selecionado")
-	}
-	link.URL, link.Slug = WebRepositoryURL(raw)
-	return link, nil
-}
-func (r *Repository) CreateBranch(ctx context.Context, dir string, o domain.BranchOptions) error {
-	if o.Name == "" || strings.HasPrefix(o.Name, "-") || o.Name == "HEAD" {
-		return fmt.Errorf("nome de branch inválido")
-	}
-	if _, e := r.Exec(ctx, dir, "check-ref-format", "refs/heads/"+o.Name); e != nil {
-		return fmt.Errorf("nome de branch inválido")
-	}
-	exists, e := r.BranchExists(ctx, dir, o.Name)
-	if e != nil {
-		return e
-	}
-	if exists {
-		return fmt.Errorf("branch %q já existe", o.Name)
-	}
-	head, e := r.RevParseHead(ctx, dir)
-	if e != nil {
-		return fmt.Errorf("crie o primeiro commit antes de criar outra branch: %w", e)
-	}
-	base := head
-	if o.Base != "" {
-		raw, e := r.Exec(ctx, dir, "rev-parse", "--verify", "--end-of-options", o.Base+"^{commit}")
-		if e != nil {
-			return fmt.Errorf("base inválida: %w", e)
-		}
-		base = strings.TrimSpace(raw)
-	}
-	if !o.Stay && base != head {
-		changes, e := r.ReadChanges(ctx, dir, "")
-		if e != nil {
-			return e
-		}
-		if !changes.IsClean() {
-			return fmt.Errorf("outra base requer workspace limpo; stage e arquivos foram preservados")
-		}
-	}
-	if o.Stay {
-		_, e = r.Exec(ctx, dir, "branch", "--no-track", "--", o.Name, base)
-	} else {
-		_, e = r.Exec(ctx, dir, "switch", "--no-overwrite-ignore", "--no-recurse-submodules", "--no-track", "-c", o.Name, base)
-	}
-	return e
-}
 func (r *Repository) History(ctx context.Context, dir string, o domain.HistoryOptions) (*domain.HistoryPage, error) {
 	refs, e := r.Exec(ctx, dir, "for-each-ref", "--format=%(refname)%00%(objectname)")
 	if e != nil {
@@ -194,7 +101,7 @@ func (r *Repository) History(ctx context.Context, dir string, o domain.HistoryOp
 			continue
 		}
 		if len(fields) != 8 {
-			return nil, fmt.Errorf("metadados de histórico inválidos")
+			return nil, fmt.Errorf("invalid history metadata")
 		}
 		if p.Count == o.Limit {
 			p.HasMore = true
@@ -206,16 +113,7 @@ func (r *Repository) History(ctx context.Context, dir string, o domain.HistoryOp
 	return p, nil
 }
 func (r *Repository) CommitDetail(ctx context.Context, dir, hash string) (*domain.CommitDetail, error) {
-	if reader, ok := r.Runner.(interface {
-		CommitPreview(context.Context, string, string) (string, error)
-	}); ok {
-		raw, e := reader.CommitPreview(ctx, dir, hash)
-		if e != nil {
-			return nil, e
-		}
-		return &domain.CommitDetail{Hash: hash, Text: raw}, nil
-	}
-	raw, e := r.Exec(ctx, dir, "--no-pager", "show", "--no-ext-diff", "--no-textconv", "--color=never", "--format=fuller", "--stat", "--patch", "--diff-merges=first-parent", hash, "--")
+	raw, e := r.CommitPreview(ctx, dir, hash)
 	if e != nil {
 		return nil, e
 	}
@@ -241,33 +139,15 @@ func (r *NativeRunner) CommitPreview(ctx context.Context, dir, hash string) (str
 	}
 	return text, nil
 }
-func (r *Repository) DefaultBranch(ctx context.Context, dir string) (string, error) {
-	link, e := r.RepositoryIdentity(ctx, dir)
-	if e != nil {
-		return "", e
-	}
-	if link.Remote == "" {
-		return "", nil
-	}
-	raw, e := r.Exec(ctx, dir, "for-each-ref", "--format=%(symref)", "refs/remotes/"+link.Remote+"/HEAD")
-	if e != nil {
-		return "", e
-	}
-	return strings.TrimPrefix(strings.TrimSpace(raw), "refs/remotes/"+link.Remote+"/"), nil
-}
-func (r *Repository) CommitDraft(ctx context.Context, dir, base string) (string, string, error) {
+func (r *Repository) CommitDraft(ctx context.Context, dir, remote, base string) (string, string, error) {
 	// Resolve refs before constructing the range; never interpret options or
 	// arbitrary revision expressions as a command argument list.
-	link, e := r.RepositoryIdentity(ctx, dir)
-	if e != nil {
-		return "", "", e
-	}
-	ref := "refs/remotes/" + link.Remote + "/" + base
+	ref := "refs/remotes/" + remote + "/" + base
 	raw, e := r.Exec(ctx, dir, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
 	if e != nil {
 		raw, e = r.Exec(ctx, dir, "rev-parse", "--verify", "--end-of-options", base+"^{commit}")
 		if e != nil {
-			return "", "", fmt.Errorf("base não disponível localmente; faça fetch explícito ou escolha outra base: %w", e)
+			return "", "", fmt.Errorf("base is not available locally; fetch explicitly or choose another base: %w", e)
 		}
 	}
 	oid := strings.TrimSpace(raw)
@@ -276,7 +156,7 @@ func (r *Repository) CommitDraft(ctx context.Context, dir, base string) (string,
 		return "", "", e
 	}
 	if strings.TrimSpace(messages) == "" {
-		return "", "", fmt.Errorf("nenhum commit da branch em relação à base")
+		return "", "", fmt.Errorf("the branch has no commits relative to the base")
 	}
 	fields := strings.Split(messages, "\x00")
 	title := strings.TrimSpace(fields[0])
@@ -295,11 +175,11 @@ func (r *Repository) CommitDraft(ctx context.Context, dir, base string) (string,
 func (r *Repository) PublishedHead(ctx context.Context, dir, remote, branch, oid string) error {
 	raw, e := r.Exec(ctx, dir, "ls-remote", "--heads", "--", remote, "refs/heads/"+branch)
 	if e != nil {
-		return fmt.Errorf("não foi possível conferir a branch publicada: %w", e)
+		return fmt.Errorf("cannot verify the published branch: %w", e)
 	}
 	fields := strings.Fields(raw)
 	if len(fields) != 2 || fields[0] != oid || fields[1] != "refs/heads/"+branch {
-		return fmt.Errorf("publique a branch atual pelo Push explícito antes de criar o PR")
+		return fmt.Errorf("publish the current branch with the explicit push before creating the PR")
 	}
 	return nil
 }
@@ -309,22 +189,18 @@ const MaxBranchFiles = 300
 
 // BranchChanges collects commits and per-file diffs of base...HEAD using the
 // locally known base (remote-tracking ref first, then the local branch).
-func (r *Repository) BranchChanges(ctx context.Context, dir, base string) (*domain.BranchChanges, error) {
-	link, e := r.RepositoryIdentity(ctx, dir)
-	if e != nil {
-		return nil, e
-	}
-	ref := "refs/remotes/" + link.Remote + "/" + base
+func (r *Repository) BranchChanges(ctx context.Context, dir, remote, base string) (*domain.BranchChanges, error) {
+	ref := "refs/remotes/" + remote + "/" + base
 	raw, e := r.Exec(ctx, dir, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
 	if e != nil {
 		ref = base
 		if raw, e = r.Exec(ctx, dir, "rev-parse", "--verify", "--end-of-options", base+"^{commit}"); e != nil {
-			return nil, fmt.Errorf("base %q não disponível localmente; faça fetch explícito ou escolha outra base: %w", base, e)
+			return nil, fmt.Errorf("base %q is not available locally; fetch explicitly or choose another base: %w", base, e)
 		}
 	}
 	mergeBase, e := r.Exec(ctx, dir, "merge-base", strings.TrimSpace(raw), "HEAD")
 	if e != nil {
-		return nil, fmt.Errorf("a branch não compartilha histórico com %q: %w", base, e)
+		return nil, fmt.Errorf("the branch shares no history with %q: %w", base, e)
 	}
 	mergeBase = strings.TrimSpace(mergeBase)
 	out := &domain.BranchChanges{Base: base, BaseRef: ref, MergeBase: mergeBase}
@@ -339,7 +215,7 @@ func (r *Repository) BranchChanges(ctx context.Context, dir, base string) (*doma
 		}
 	}
 	if len(out.Commits) == 0 {
-		return nil, fmt.Errorf("nenhum commit da branch em relação à base %q", base)
+		return nil, fmt.Errorf("the branch has no commits relative to the base %q", base)
 	}
 	names, e := r.Exec(ctx, dir, "diff", "--no-ext-diff", "--name-only", "-z", mergeBase, "HEAD", "--")
 	if e != nil {
@@ -347,7 +223,7 @@ func (r *Repository) BranchChanges(ctx context.Context, dir, base string) (*doma
 	}
 	paths := nulPaths(names)
 	if len(paths) > MaxBranchFiles {
-		return nil, fmt.Errorf("a branch altera %d arquivos (limite %d); divida o PR ou escreva a descrição manualmente (nada enviado)", len(paths), MaxBranchFiles)
+		return nil, fmt.Errorf("the branch changes %d files (limit %d); split the PR or write the description manually (nothing sent)", len(paths), MaxBranchFiles)
 	}
 	for _, path := range paths {
 		diff, e := r.Exec(ctx, dir, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--color=never", mergeBase, "HEAD", "--", path)
@@ -362,4 +238,50 @@ func (r *Repository) BranchChanges(ctx context.Context, dir, base string) (*doma
 		out.Files = append(out.Files, file)
 	}
 	return out, nil
+}
+
+// Primitives for the application's branch and remote policies (VORQ-017):
+// the adapter runs Git and parses output; the rules live in internal/app.
+
+// RemoteWebURL reads a remote URL and derives its credential-free web link.
+func (r *Repository) RemoteWebURL(ctx context.Context, dir, remote string) (string, string, error) {
+	raw, e := r.Exec(ctx, dir, "remote", "get-url", "--", remote)
+	if e != nil {
+		return "", "", fmt.Errorf("cannot read remote %q", remote)
+	}
+	url, slug := WebRepositoryURL(raw)
+	return url, slug, nil
+}
+
+// ValidBranchName reports whether Git accepts name as a branch.
+func (r *Repository) ValidBranchName(ctx context.Context, dir, name string) bool {
+	_, e := r.Exec(ctx, dir, "check-ref-format", "refs/heads/"+name)
+	return e == nil
+}
+
+// ResolveCommit resolves a revision to a commit ID without option parsing.
+func (r *Repository) ResolveCommit(ctx context.Context, dir, rev string) (string, error) {
+	raw, e := r.Exec(ctx, dir, "rev-parse", "--verify", "--end-of-options", rev+"^{commit}")
+	return strings.TrimSpace(raw), e
+}
+
+// CreateBranchAt creates name at oid, optionally switching to it (without
+// overwriting ignored files or recursing into submodules).
+func (r *Repository) CreateBranchAt(ctx context.Context, dir, name, oid string, switchTo bool) error {
+	var e error
+	if switchTo {
+		_, e = r.Exec(ctx, dir, "switch", "--no-overwrite-ignore", "--no-recurse-submodules", "--no-track", "-c", name, oid)
+	} else {
+		_, e = r.Exec(ctx, dir, "branch", "--no-track", "--", name, oid)
+	}
+	return e
+}
+
+// RemoteDefaultBranch reads refs/remotes/<remote>/HEAD (local, no fetch).
+func (r *Repository) RemoteDefaultBranch(ctx context.Context, dir, remote string) (string, error) {
+	raw, e := r.Exec(ctx, dir, "for-each-ref", "--format=%(symref)", "refs/remotes/"+remote+"/HEAD")
+	if e != nil {
+		return "", e
+	}
+	return strings.TrimPrefix(strings.TrimSpace(raw), "refs/remotes/"+remote+"/"), nil
 }

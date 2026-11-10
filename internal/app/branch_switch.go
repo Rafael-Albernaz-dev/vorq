@@ -19,10 +19,7 @@ type BranchSwitchService interface {
 }
 
 func (a *App) ListLocalBranches(ctx context.Context, dir string) ([]domain.LocalBranch, error) {
-	repo, ok := a.gitRunner.(BranchSwitchRepository)
-	if !ok {
-		return nil, fmt.Errorf("adaptador sem suporte a troca de branch")
-	}
+	repo := a.gitRunner
 	p, err := a.ResolveProject(ctx, dir)
 	if err != nil {
 		return nil, err
@@ -47,13 +44,13 @@ func (a *App) PrepareBranchSwitch(ctx context.Context, dir, name string) (*domai
 		}
 	}
 	if target == nil {
-		return nil, fmt.Errorf("branch local %q não encontrada", name)
+		return nil, fmt.Errorf("local branch %q not found", name)
 	}
 	if target.Current {
-		return nil, fmt.Errorf("a branch %q já está ativa", name)
+		return nil, fmt.Errorf("branch %q is already active", name)
 	}
 	if target.WorktreePath != "" && filepath.Clean(target.WorktreePath) != filepath.Clean(p.RootPath) {
-		return nil, fmt.Errorf("branch %q em uso no worktree %q; use a aba Worktrees para acessá-la", name, target.WorktreePath)
+		return nil, fmt.Errorf("branch %q is in use by worktree %q; open it from the Worktrees tab", name, target.WorktreePath)
 	}
 	from, _, err := a.gitRunner.Branch(ctx, p.RootPath)
 	if err != nil {
@@ -68,7 +65,7 @@ func (a *App) PrepareBranchSwitch(ctx context.Context, dir, name string) (*domai
 		return nil, err
 	}
 	if changes == nil || !changes.IsClean() {
-		return nil, fmt.Errorf("troca bloqueada: workspace deve estar limpo; faça commit das alterações antes de trocar (stage e arquivos preservados)")
+		return nil, fmt.Errorf("switch blocked: the workspace must be clean; commit your changes before switching (stage and files preserved)")
 	}
 	return &domain.BranchSwitchPlan{WorkspacePath: p.RootPath, From: from, FromHash: head, Target: target.Name, TargetHash: target.Hash}, nil
 }
@@ -78,8 +75,8 @@ func (a *App) SwitchBranch(ctx context.Context, dir string, reviewed domain.Bran
 		return err
 	}
 	if *fresh != reviewed {
-		return fmt.Errorf("origem, destino ou HEAD mudou; revise a troca de branch novamente")
+		return fmt.Errorf("source, target or HEAD changed; review the branch switch again")
 	}
-	repo := a.gitRunner.(BranchSwitchRepository)
+	repo := a.gitRunner
 	return repo.SwitchLocalBranch(ctx, fresh.WorkspacePath, fresh.Target)
 }

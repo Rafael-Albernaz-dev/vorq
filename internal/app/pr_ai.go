@@ -27,27 +27,26 @@ func (a *App) DraftPullRequestAI(ctx context.Context, dir, base, provider, model
 	if err := validateProvider(provider, model); err != nil {
 		return nil, err
 	}
-	p, ok := a.ai.(interface {
-		Analyze(context.Context, domain.AnalysisRequest) (json.RawMessage, error)
-	})
-	if !ok {
+	if a.ai == nil {
 		return nil, fmt.Errorf("analysis provider unavailable")
 	}
+	p := a.ai
 	draft, err := a.PreparePullRequest(ctx, dir, base)
 	if err != nil {
 		return nil, err
 	}
-	r, err := a.workflow()
-	if err != nil {
-		return nil, err
-	}
+	r := a.gitRunner
 	proj, err := a.ResolveProject(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, AnalysisTimeout)
 	defer cancel()
-	changes, err := r.BranchChanges(ctx, proj.RootPath, draft.Base)
+	link, err := a.GetRepositoryLink(ctx, proj.RootPath)
+	if err != nil {
+		return nil, err
+	}
+	changes, err := r.BranchChanges(ctx, proj.RootPath, link.Remote, draft.Base)
 	if err != nil {
 		return nil, err
 	}

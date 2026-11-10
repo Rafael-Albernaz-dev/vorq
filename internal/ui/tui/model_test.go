@@ -525,7 +525,7 @@ func TestModel_ResponsiveOverlays(t *testing.T) {
 	m, _, _, _, _ := setupStudio(t)
 	for _, size := range [][2]int{{50, 14}, {80, 24}, {140, 36}, {180, 45}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		for _, modal := range []string{"", "help", "commit", "suggest", "push", "worktrees", "error"} {
+		for _, modal := range []modalID{"", "help", "commit", "suggest", "push", "worktrees", "error"} {
 			m.modal = modal
 			m.commitPhase = "review"
 			assertFrame(t, m)

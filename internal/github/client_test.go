@@ -75,7 +75,7 @@ func TestInvalidJSONAndUncertainSave(t *testing.T) {
 	c.Run = func(context.Context, string, string, ...string) (string, error) {
 		return "", errors.New("network disconnected")
 	}
-	if _, e := c.Save(context.Background(), ".", domain.PRDraft{}); e == nil || !strings.Contains(e.Error(), "parcial") {
+	if _, e := c.Save(context.Background(), ".", domain.PRDraft{}); e == nil || !strings.Contains(e.Error(), "partial change") {
 		t.Fatal(e)
 	}
 }

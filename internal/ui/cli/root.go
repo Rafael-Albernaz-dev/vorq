@@ -67,6 +67,14 @@ func cell(s string, width int) string {
 	}
 }
 
+// Composition-root contract checks (VORQ-017): the native adapters must
+// provide every capability the application core declares.
+var (
+	_ app.Repository = (*git.Repository)(nil)
+	_ app.AIProvider = (*suggest.CLIProvider)(nil)
+	_ git.Runner     = (*git.NativeRunner)(nil)
+)
+
 // NewRootCmd initializes the root Cobra command and its subcommands.
 func NewRootCmd() *cobra.Command {
 	var showVersion bool
@@ -487,7 +495,7 @@ func newCommitCmd(appCore interface {
 			reader := bufio.NewReader(cmd.InOrStdin())
 			manual := cmd.Flags().Changed("message")
 			if manual && strings.TrimSpace(message) == "" {
-				return fmt.Errorf("a mensagem de commit não pode estar vazia")
+				return fmt.Errorf("the commit message must not be empty")
 			}
 			if cmd.Flags().Changed("type") {
 				if err := app.ValidateCommitType(commitType); err != nil {
@@ -509,7 +517,7 @@ func newCommitCmd(appCore interface {
 				}
 				preview, proposal, err := appCore.PreviewCommit(ctx, ".", previewType, all)
 				if err != nil {
-					return fmt.Errorf("dry-run: %w (use --all para incluir alterações fora do stage)", err)
+					return fmt.Errorf("dry-run: %w (use --all to include unstaged changes)", err)
 				}
 				proposedMessage := proposal.Message()
 				if manual {
@@ -533,7 +541,7 @@ func newCommitCmd(appCore interface {
 			}
 			if cs.StagedCount() == 0 {
 				if manual || all {
-					return fmt.Errorf("nenhum arquivo em stage; use --all ou git add antes de --message")
+					return fmt.Errorf("no staged files; use --all or git add before --message")
 				}
 				fmt.Fprintln(out, warnStyle.Render("Nenhum arquivo em stage. Deseja adicionar alterações?"))
 				fmt.Fprintln(out, "[1] Adicionar todos os arquivos modificados (git add -A)\n[2] Selecionar arquivos individualmente\n[3] Cancelar")
@@ -617,7 +625,7 @@ func readCommitLine(reader *bufio.Reader) (string, error) {
 	line, err := reader.ReadString('\n')
 	if err != nil {
 		// EOF is not an empty confirmation. Never authorize a commit implicitly.
-		return "", fmt.Errorf("entrada interativa interrompida; nenhum commit criado (use --message para scripts): %w", err)
+		return "", fmt.Errorf("interactive input interrupted; no commit created (use --message in scripts): %w", err)
 	}
 	return strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r"), nil
 }
@@ -703,7 +711,7 @@ func newPushCmd(appCore app.PushService) *cobra.Command {
 					fmt.Fprint(out, prompt)
 					line, err := reader.ReadString('\n')
 					if err != nil {
-						return fmt.Errorf("confirmação de push interrompida; nada publicado: %w", err)
+						return fmt.Errorf("push confirmation interrupted; nothing published: %w", err)
 					}
 					choice := strings.ToLower(strings.TrimSpace(line))
 					if choice == "n" {

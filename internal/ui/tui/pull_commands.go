@@ -15,7 +15,7 @@ func (m *Model) inspectPull() tea.Cmd {
 	m.commitEditing = false
 	m.dialogID++
 	id, core, dir := m.dialogID, m.core, m.dir
-	m.modal = "pull"
+	m.modal = modalPull
 	m.modalScroll = 0
 	m.pullTarget = nil
 	m.busy = "Inspecionando atualização…"

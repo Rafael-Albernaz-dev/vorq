@@ -34,11 +34,11 @@ func (m *Model) openBranchForm() {
 	m.formReview = false
 	m.fieldIndex = 0
 	m.modalScroll = 0
-	m.modal = "workflow"
+	m.modal = modalWorkflow
 	m.fields = []workflowField{field("Nome", "", false, false), field("Base (vazio = HEAD)", "", false, false), field("Criar e entrar", "sim", false, true)}
 }
 func (m *Model) openFilterForm() {
-	m.modal = "workflow"
+	m.modal = modalWorkflow
 	m.formKind = "filter"
 	m.formReview = false
 	m.fieldIndex = 0
@@ -51,7 +51,7 @@ func (m *Model) openFilterForm() {
 }
 func (m *Model) preparePR() tea.Cmd {
 	ctx, cancel, id := m.workflowContext()
-	m.modal = "workflow"
+	m.modal = modalWorkflow
 	m.fields = nil
 	m.busy = "Preparando PR a partir dos commits…"
 	dir, core := m.dir, m.core
@@ -64,7 +64,7 @@ func (m *Model) preparePR() tea.Cmd {
 func (m *Model) setupPRForm() {
 	d := m.prDraft
 	m.formKind = "pr"
-	m.modal = "workflow"
+	m.modal = modalWorkflow
 	m.fieldIndex = 0
 	m.formReview = false
 	m.modalScroll = 0
