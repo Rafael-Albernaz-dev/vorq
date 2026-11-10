@@ -54,6 +54,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice = "Caminho copiado: " + safeText(msg.path)
 		}
 		return m, nil
+	case prAIMsg:
+		return m, m.receivePRAI(msg)
 	case aiModelsMsg:
 		return m, m.receiveAIModels(msg)
 	case aiProposalMsg:

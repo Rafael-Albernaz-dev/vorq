@@ -17,6 +17,7 @@ type WorkflowRepository interface {
 	DefaultBranch(context.Context, string) (string, error)
 	CommitDraft(context.Context, string, string) (string, string, error)
 	PublishedHead(context.Context, string, string, string, string) error
+	BranchChanges(context.Context, string, string) (*domain.BranchChanges, error)
 }
 type PullRequestProvider interface {
 	List(context.Context, string, string, domain.PRListOptions) ([]domain.PullRequest, error)

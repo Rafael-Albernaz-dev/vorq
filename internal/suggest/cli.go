@@ -65,6 +65,8 @@ func (p *CLIProvider) Analyze(ctx context.Context, req domain.AnalysisRequest) (
 		prompt += "Organize ALL supplied file IDs into ordered cohesive commits, respecting dependencies and keeping tests with their implementation. Do not split a file across groups. Return {\"commits\":[{\"subject\":\"English Conventional Commit subject, <=100 chars\",\"body\":\"English description\",\"reason\":\"why these changes belong together\",\"files\":[\"file ID\"]}]}. Each provided ID must occur exactly once. File references must be the \"id\" values exactly as supplied (for example F0001), never paths. No commands or patches.\n"
 	case "stage":
 		prompt += "Decide which changed files belong in the NEXT single cohesive commit. You receive the repository's own context documents (context_documents: README, CONTRIBUTING, docs, templates, commit conventions) and the changed files (files: working versions, staged or not). Follow the conventions in the context documents. Basic checks for every file: leftover debug code or prints, secrets or credentials, generated/build/lock files, unrelated changes mixed together, unfinished work (TODO/FIXME added), and tests or documentation the context documents require. Put the files of the next commit in stage (each with a reason) and EVERY other file in hold (each with a reason and the concrete risk). Every supplied file id must appear exactly once in stage or hold; references must be the id values (for example F0001), never paths. Then write an English Conventional Commit subject (<=100 chars) and body describing ONLY the staged files. Return {\"summary\":\"English assessment of the working changes\",\"stage\":[{\"file_id\":\"id\",\"reason\":\"why it belongs\"}],\"hold\":[{\"file_id\":\"id\",\"reason\":\"why not now\",\"risk\":\"risk if committed\"}],\"subject\":\"type(scope): subject\",\"body\":\"body\"}.\n"
+	case "pr":
+		prompt += "Write the GitHub pull request for this branch in English. You receive the head and base branches, the repository's context documents (context_documents), the branch commits and the per-file diff since the merge base (files). If context_documents contain a pull request template (for example .github/pull_request_template.md), fill in that template keeping its headings and checklists; otherwise use these sections: Summary, Motivation, Changes, How to test, Risks, Breaking changes, Reviewer notes. Base every statement on the supplied commits and diff; never claim tests were run or results you cannot see — say what should be verified instead. Mention omitted diffs as not reviewed. Title: concise, at most 72 characters, Conventional Commit style when the project uses it. Body: GitHub Markdown. Return {\"title\":\"PR title\",\"body\":\"Markdown body\"}.\n"
 	default:
 		return nil, fmt.Errorf("unknown analysis task")
 	}
@@ -74,6 +76,8 @@ func (p *CLIProvider) Analyze(ctx context.Context, req domain.AnalysisRequest) (
 		schema = planSchema
 	case "stage":
 		schema = stageSchema
+	case "pr":
+		schema = prSchema
 	}
 	// Constrain file references to the IDs actually supplied, so a model
 	// cannot answer with paths or invented IDs.
@@ -89,11 +93,13 @@ func (p *CLIProvider) Analyze(ctx context.Context, req domain.AnalysisRequest) (
 			files = wrapped.Files
 		}
 	}
-	if len(files) > 0 {
-		var ids []string
-		for _, f := range files {
+	var ids []string
+	for _, f := range files {
+		if f.ID != "" {
 			ids = append(ids, f.ID)
 		}
+	}
+	if len(ids) > 0 {
 		enum, _ := json.Marshal(ids)
 		schema = strings.ReplaceAll(schema, idSchemaPlaceholder, `{"type":"string","enum":`+string(enum)+`}`)
 	}
@@ -109,6 +115,8 @@ const (
 	reviewSchema  = `{"type":"object","properties":{"summary":{"type":"string"},"findings":{"type":"array","items":{"type":"object","properties":{"file_id":` + idSchemaPlaceholder + `,"severity":{"type":"string","enum":["info","warning","error"]},"message":{"type":"string"},"evidence":{"type":"string"},"suggestion":{"type":"string"}},"required":["file_id","severity","message","evidence"],"additionalProperties":false}}},"required":["summary","findings"],"additionalProperties":false}`
 	planSchema    = `{"type":"object","properties":{"commits":{"type":"array","items":{"type":"object","properties":{"subject":{"type":"string"},"body":{"type":"string"},"reason":{"type":"string"},"files":{"type":"array","items":` + idSchemaPlaceholder + `}},"required":["subject","body","reason","files"],"additionalProperties":false}}},"required":["commits"],"additionalProperties":false}`
 )
+
+var prSchema = `{"type":"object","properties":{"title":{"type":"string"},"body":{"type":"string"}},"required":["title","body"],"additionalProperties":false}`
 
 var stageSchema = `{"type":"object","properties":{"summary":{"type":"string"},"stage":{"type":"array","items":{"type":"object","properties":{"file_id":` + idSchemaPlaceholder + `,"reason":{"type":"string"}},"required":["file_id","reason"],"additionalProperties":false}},"hold":{"type":"array","items":{"type":"object","properties":{"file_id":` + idSchemaPlaceholder + `,"reason":{"type":"string"},"risk":{"type":"string"}},"required":["file_id","reason","risk"],"additionalProperties":false}},"subject":{"type":"string"},"body":{"type":"string"}},"required":["summary","stage","hold","subject","body"],"additionalProperties":false}`
 

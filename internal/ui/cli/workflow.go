@@ -74,7 +74,7 @@ func newTreeCmd(core app.WorkflowService) *cobra.Command {
 	c.Flags().StringVar(&commit, "commit", "", "Show a full commit hash, files and diff")
 	return c
 }
-func newPRCmd(core app.WorkflowService) *cobra.Command {
+func newPRCmd(core prCore) *cobra.Command {
 	root := &cobra.Command{Use: "pr", Short: "List, inspect, create and edit GitHub PRs using authenticated gh"}
 	var o domain.PRListOptions
 	list := &cobra.Command{Use: "list", Args: cobra.NoArgs, RunE: func(c *cobra.Command, args []string) error {
@@ -112,8 +112,16 @@ func newPRCmd(core app.WorkflowService) *cobra.Command {
 	root.AddCommand(list, view, newPRSaveCmd(core, false), newPRSaveCmd(core, true))
 	return root
 }
-func newPRSaveCmd(core app.WorkflowService, edit bool) *cobra.Command {
-	var title, bodyFile, base string
+
+// prCore is what the pr commands need, including AI drafting (VORQ-016).
+type prCore interface {
+	app.WorkflowService
+	app.PullRequestAIService
+}
+
+func newPRSaveCmd(core prCore, edit bool) *cobra.Command {
+	var title, bodyFile, base, provider, model string
+	var useAI bool
 	var labels, reviewers, remove []string
 	var draft, yes bool
 	use := "create"
@@ -145,6 +153,14 @@ func newPRSaveCmd(core app.WorkflowService, edit bool) *cobra.Command {
 			}
 			d = *p
 			d.Draft = draft
+			if useAI {
+				fmt.Fprintf(c.ErrOrStderr(), "Sending the branch commits and base...HEAD diff (local base, no fetch), the PR template and tracked context documents to %s.\n", provider)
+				ai, e := core.DraftPullRequestAI(c.Context(), ".", d.Base, provider, model)
+				if e != nil {
+					return fmt.Errorf("%w\nNothing was sent to GitHub; retry, change --provider, or write --title/--body-file", e)
+				}
+				d.Title, d.Body = ai.Title, ai.Body
+			}
 		}
 		if c.Flags().Changed("title") {
 			d.Title = title
@@ -187,6 +203,9 @@ func newPRSaveCmd(core app.WorkflowService, edit bool) *cobra.Command {
 		c.Flags().StringSliceVar(&remove, "remove-label", nil, "Labels to remove")
 	} else {
 		c.Flags().BoolVar(&draft, "draft", true, "Create as draft (use --draft=false for ready)")
+		c.Flags().BoolVar(&useAI, "ai", false, "Write title and description with AI from the branch commits and diff (--title/--body-file still override)")
+		c.Flags().StringVar(&provider, "provider", "codex", "AI provider for --ai: codex, gemini (Antigravity) or claude (Claude Code)")
+		c.Flags().StringVar(&model, "model", "", "AI model ID for --ai")
 	}
 	c.Flags().BoolVarP(&yes, "yes", "y", false, "Send to displayed destination without interactive confirmation")
 	return c

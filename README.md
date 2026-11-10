@@ -288,3 +288,9 @@ The advice lists **PREPARAR** (files for the next commit, with reasons), **DEIXA
 vorq ai stage --provider claude            # show the advice only
 vorq ai stage --provider claude --apply    # confirm, then update the stage
 ```
+
+### Pull requests written with AI
+
+In the new-PR form, press **Ctrl+G** or click **[IA]** (CLI: `vorq pr create --ai --provider claude`). The chosen provider receives the branch commits and the per-file diff since the merge base with the base branch (locally known ref, no fetch; up to 300 files and 2 MiB, files above 1 MiB replaced by a visible notice), the repository PR template when present (`.github/pull_request_template.md`) and the tracked context documents. It writes an English title and a Markdown description — summary, motivation, changes, how to test, risks, breaking changes and reviewer notes — filling your template's headings when it exists, without claiming tests it cannot see.
+
+Only the title and description fields are filled; base, labels, reviewers and draft stay as you set them, `--title`/`--body-file` still override in the CLI, and the usual review, confirmation and "branch already published" checks decide what is sent to GitHub. A HEAD change during the analysis discards the result.

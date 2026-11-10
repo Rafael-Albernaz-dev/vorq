@@ -75,3 +75,27 @@ type PRDraft struct {
 	Draft                                        bool
 	Labels, Reviewers, RemoveLabels              []string
 }
+
+// BranchCommit is one commit of the branch being proposed as a PR.
+type BranchCommit struct {
+	Hash    string `json:"hash"`
+	Subject string `json:"subject"`
+	Body    string `json:"body,omitempty"`
+}
+
+// BranchFileDiff is the diff of one file between the merge base and HEAD.
+type BranchFileDiff struct {
+	Path    string `json:"path"`
+	Diff    string `json:"diff"`
+	Omitted bool   `json:"omitted,omitempty"` // diff above the per-file limit, replaced by a notice
+}
+
+// BranchChanges is what a PR proposes: commits and diff since the merge base
+// with the (locally known) base branch. It never fetches.
+type BranchChanges struct {
+	Base      string           `json:"base"`
+	BaseRef   string           `json:"base_ref"`
+	MergeBase string           `json:"merge_base"`
+	Commits   []BranchCommit   `json:"commits"`
+	Files     []BranchFileDiff `json:"files"`
+}
