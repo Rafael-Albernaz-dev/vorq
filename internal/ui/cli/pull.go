@@ -20,7 +20,7 @@ func newPullCmd(core app.PullService) *cobra.Command {
 		if !yes {
 			choice, err := readCommitChoice(bufio.NewReader(cmd.InOrStdin()), out, "Buscar e aplicar atualização? [y/n]: ", []string{"y", "n"})
 			if err != nil {
-				return fmt.Errorf("confirmação de atualização interrompida; nenhuma busca solicitada (use --yes para scripts)")
+				return fmt.Errorf("update confirmation interrupted; no fetch requested (use --yes in scripts)")
 			}
 			if choice != "y" {
 				fmt.Fprintln(out, "Atualização cancelada.")

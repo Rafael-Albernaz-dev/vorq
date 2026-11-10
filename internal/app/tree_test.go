@@ -186,7 +186,7 @@ func TestApp_ReviewedCommitRejectsChangedIndex(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateReviewedCommit(ctx, dir, "fix: review", reviewed.StagedDiff); err == nil || !strings.Contains(err.Error(), "stage mudou") {
+	if _, err := a.CreateReviewedCommit(ctx, dir, "fix: review", reviewed.StagedDiff); err == nil || !strings.Contains(err.Error(), "stage changed") {
 		t.Fatalf("changed index accepted: %v", err)
 	}
 	if _, err := r.RevParseHead(ctx, dir); err == nil {

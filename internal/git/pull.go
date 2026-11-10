@@ -30,7 +30,7 @@ func (r *Repository) FetchPull(ctx context.Context, dir, remote, branch string) 
 	}
 	tracking = strings.TrimSpace(tracking)
 	if !strings.HasPrefix(tracking, "refs/remotes/") {
-		return "", "", fmt.Errorf("upstream remoto inválido")
+		return "", "", fmt.Errorf("invalid remote upstream")
 	}
 	source := "refs/heads/" + branch
 	_, err = r.Exec(ctx, dir, "fetch", "--no-tags", "--no-prune", "--no-prune-tags", "--no-recurse-submodules", "--no-auto-maintenance", "--refmap=", "--", remote, source+":"+ref, source+":"+tracking)
@@ -47,7 +47,7 @@ func (r *Repository) ApplyPull(ctx context.Context, dir, hash string) (string, e
 }
 func (r *Repository) DropPullRef(ctx context.Context, dir, ref, hash string) error {
 	if !strings.HasPrefix(ref, "refs/vorq/incoming/") {
-		return fmt.Errorf("referência de atualização inválida")
+		return fmt.Errorf("invalid update ref")
 	}
 	args := []string{"update-ref", "-d", ref}
 	if hash != "" {

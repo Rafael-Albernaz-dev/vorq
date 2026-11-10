@@ -19,7 +19,7 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 		return nil, err
 	}
 	if path == "." || filepath.Clean(path) != path || strings.ContainsRune(path, 0) {
-		return nil, fmt.Errorf("descarte exige o caminho exato de um arquivo")
+		return nil, fmt.Errorf("discard requires the exact path of a file")
 	}
 	proj, err := a.ResolveProject(ctx, currentDir)
 	if err != nil {
@@ -41,7 +41,7 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 			return nil, statErr
 		}
 		if info.Mode()&os.ModeSymlink != 0 || (i == len(parts)-1 && !info.Mode().IsRegular()) {
-			return nil, fmt.Errorf("descarte bloqueado para links, diretórios e submódulos: %q", path)
+			return nil, fmt.Errorf("discard blocked for links, directories and submodules: %q", path)
 		}
 	}
 	ignored, err := a.gitRunner.IgnoredPath(ctx, proj.RootPath, path)
@@ -67,17 +67,17 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 		}
 	}
 	if status == nil {
-		return nil, fmt.Errorf("arquivo sem alterações para descartar: %q", path)
+		return nil, fmt.Errorf("file has no changes to discard: %q", path)
 	}
 	if status.IsConflicted() || status.OrigPath != "" || strings.ContainsAny(status.Staged+status.Unstaged, "RCT") {
-		return nil, fmt.Errorf("descarte bloqueado para renames, conflitos e mudanças de tipo: %q", path)
+		return nil, fmt.Errorf("discard blocked for renames, conflicts and type changes: %q", path)
 	}
 	index, err := a.gitRunner.IndexEntry(ctx, proj.RootPath, path)
 	if err != nil {
 		return nil, err
 	}
 	if index != nil && (index.Mode == "160000" || index.Mode == "120000") {
-		return nil, fmt.Errorf("descarte de submódulo ou link simbólico bloqueado")
+		return nil, fmt.Errorf("discarding a submodule or symlink is blocked")
 	}
 	plan := &domain.DiscardPlan{WorkspacePath: proj.RootPath, Path: path, Delete: status.IsUntracked() || status.Staged == "A", Staged: status.IsStaged()}
 	plan.Impact = "Todas as modificações fora do stage serão revertidas para o índice."
@@ -101,7 +101,7 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 			return nil, err
 		}
 		if entry != nil && (entry.Mode == "160000" || entry.Mode == "120000") {
-			return nil, fmt.Errorf("descarte de submódulo ou link simbólico bloqueado, inclusive quando excluído")
+			return nil, fmt.Errorf("discarding a submodule or symlink is blocked, even when deleted")
 		}
 		fmt.Fprint(hash, head)
 	}
@@ -142,14 +142,14 @@ func (a *App) PrepareDiscard(ctx context.Context, currentDir, path string) (*dom
 // Validation failures leave the index and working file untouched.
 func (a *App) DiscardFile(ctx context.Context, currentDir string, plan domain.DiscardPlan, confirmed bool) error {
 	if !confirmed {
-		return fmt.Errorf("descarte exige confirmação explícita")
+		return fmt.Errorf("discard requires explicit confirmation")
 	}
 	actual, err := a.PrepareDiscard(ctx, currentDir, plan.Path)
 	if err != nil {
 		return err
 	}
 	if *actual != plan {
-		return fmt.Errorf("arquivo, índice ou HEAD mudou após a revisão; confirme um novo descarte")
+		return fmt.Errorf("file, index or HEAD changed after the review; confirm a new discard")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -166,7 +166,7 @@ func (a *App) DiscardFile(ctx context.Context, currentDir string, plan domain.Di
 		}
 		defer root.Close()
 		if err := root.Remove(plan.Path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("stage removido, mas exclusão do arquivo falhou: %w", err)
+			return fmt.Errorf("removed from the stage, but deleting the file failed: %w", err)
 		}
 		return nil
 	}

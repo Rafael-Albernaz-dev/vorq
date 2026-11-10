@@ -216,7 +216,7 @@ func (a *App) CreateReviewedCommit(ctx context.Context, currentDir, message, exp
 		return nil, err
 	}
 	if cs.StagedDiff != expectedDiff {
-		return nil, fmt.Errorf("o stage mudou após a revisão; revise os arquivos e confirme novamente")
+		return nil, fmt.Errorf("the stage changed after the review; review the files and confirm again")
 	}
 	return a.CreateCommit(ctx, currentDir, message)
 }

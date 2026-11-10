@@ -282,5 +282,5 @@ func (a *App) ToggleStage(ctx context.Context, currentDir, path string) error {
 			return a.StageFiles(ctx, proj.RootPath, paths)
 		}
 	}
-	return fmt.Errorf("arquivo sem alterações para stage: %q", path)
+	return fmt.Errorf("file has no changes to stage: %q", path)
 }

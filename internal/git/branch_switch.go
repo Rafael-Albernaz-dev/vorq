@@ -18,13 +18,13 @@ func (r *Repository) LocalBranches(ctx context.Context, dir string) ([]domain.Lo
 	}
 	fields := strings.Split(raw, "\x00")
 	if len(fields)%4 != 1 || fields[len(fields)-1] != "\n" {
-		return nil, fmt.Errorf("lista de branches inválida ou incompleta")
+		return nil, fmt.Errorf("invalid or incomplete branch list")
 	}
 	branches := make([]domain.LocalBranch, 0, len(fields)/4)
 	for i := 0; i+3 < len(fields); i += 4 {
 		name := strings.TrimPrefix(fields[i], "\n")
 		if name == "" || fields[i+1] == "" {
-			return nil, fmt.Errorf("metadados de branch inválidos")
+			return nil, fmt.Errorf("invalid branch metadata")
 		}
 		branches = append(branches, domain.LocalBranch{Name: name, Hash: fields[i+1], Current: fields[i+2] == "*", WorktreePath: fields[i+3]})
 	}

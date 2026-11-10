@@ -20,7 +20,7 @@ func newSwitchCmd(core app.BranchSwitchService) *cobra.Command {
 		if !yes {
 			choice, err := readCommitChoice(bufio.NewReader(cmd.InOrStdin()), out, "Confirmar troca? [y/n]: ", []string{"y", "n"})
 			if err != nil {
-				return fmt.Errorf("confirmação interrompida; branch preservada (use --yes para scripts)")
+				return fmt.Errorf("confirmation interrupted; branch preserved (use --yes in scripts)")
 			}
 			if choice != "y" {
 				fmt.Fprintln(out, "Troca cancelada.")
