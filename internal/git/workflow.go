@@ -303,3 +303,63 @@ func (r *Repository) PublishedHead(ctx context.Context, dir, remote, branch, oid
 	}
 	return nil
 }
+
+// MaxBranchFiles bounds how many changed files a PR analysis inspects.
+const MaxBranchFiles = 300
+
+// BranchChanges collects commits and per-file diffs of base...HEAD using the
+// locally known base (remote-tracking ref first, then the local branch).
+func (r *Repository) BranchChanges(ctx context.Context, dir, base string) (*domain.BranchChanges, error) {
+	link, e := r.RepositoryIdentity(ctx, dir)
+	if e != nil {
+		return nil, e
+	}
+	ref := "refs/remotes/" + link.Remote + "/" + base
+	raw, e := r.Exec(ctx, dir, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
+	if e != nil {
+		ref = base
+		if raw, e = r.Exec(ctx, dir, "rev-parse", "--verify", "--end-of-options", base+"^{commit}"); e != nil {
+			return nil, fmt.Errorf("base %q não disponível localmente; faça fetch explícito ou escolha outra base: %w", base, e)
+		}
+	}
+	mergeBase, e := r.Exec(ctx, dir, "merge-base", strings.TrimSpace(raw), "HEAD")
+	if e != nil {
+		return nil, fmt.Errorf("a branch não compartilha histórico com %q: %w", base, e)
+	}
+	mergeBase = strings.TrimSpace(mergeBase)
+	out := &domain.BranchChanges{Base: base, BaseRef: ref, MergeBase: mergeBase}
+	log, e := r.Exec(ctx, dir, "log", "--reverse", "--format=%H%x00%s%x00%b%x1e", mergeBase+"..HEAD", "--")
+	if e != nil {
+		return nil, e
+	}
+	for _, record := range strings.Split(log, "\x1e") {
+		fields := strings.SplitN(strings.TrimLeft(record, "\n"), "\x00", 3)
+		if len(fields) == 3 && fields[0] != "" {
+			out.Commits = append(out.Commits, domain.BranchCommit{Hash: fields[0], Subject: strings.TrimSpace(fields[1]), Body: strings.TrimSpace(fields[2])})
+		}
+	}
+	if len(out.Commits) == 0 {
+		return nil, fmt.Errorf("nenhum commit da branch em relação à base %q", base)
+	}
+	names, e := r.Exec(ctx, dir, "diff", "--no-ext-diff", "--name-only", "-z", mergeBase, "HEAD", "--")
+	if e != nil {
+		return nil, e
+	}
+	paths := nulPaths(names)
+	if len(paths) > MaxBranchFiles {
+		return nil, fmt.Errorf("a branch altera %d arquivos (limite %d); divida o PR ou escreva a descrição manualmente (nada enviado)", len(paths), MaxBranchFiles)
+	}
+	for _, path := range paths {
+		diff, e := r.Exec(ctx, dir, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--color=never", mergeBase, "HEAD", "--", path)
+		if e != nil {
+			return nil, e
+		}
+		file := domain.BranchFileDiff{Path: path, Diff: diff}
+		if len(diff) > MaxAnalysisFile {
+			file.Diff = fmt.Sprintf("[diff omitted by vorq: %d bytes, above the %d-byte per-file limit]", len(diff), MaxAnalysisFile)
+			file.Omitted = true
+		}
+		out.Files = append(out.Files, file)
+	}
+	return out, nil
+}

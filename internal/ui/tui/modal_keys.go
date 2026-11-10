@@ -38,6 +38,13 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 		m.modalScroll = max(0, m.modalScroll-delta)
 		return nil
 	}
+	if s == "esc" && m.backToPRForm() {
+		m.dialogID++
+		if m.dialogCancel != nil {
+			m.dialogCancel()
+		}
+		return nil
+	}
 	if s == "esc" {
 		if m.mutating {
 			m.notice = "Operação em andamento. Ctrl+C encerra e cancela o processo."

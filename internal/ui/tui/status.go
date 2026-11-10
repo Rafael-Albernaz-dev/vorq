@@ -358,14 +358,20 @@ func (m *Model) modalView() string {
 		if isWorkingAnalysis(m.aiTask) {
 			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nAnalisar versões de trabalho das mudanças rastreadas e novos arquivos elegíveis, incluindo fora do stage.\nIgnorados, binários, links e arquivos grandes serão listados como excluídos.\n\n" + fmt.Sprintf("Até %d MiB por análise e 1 MiB por arquivo; sem truncamento silencioso.", app.AnalysisLimit/(1024*1024)) + "\nO conteúdo sai desta máquina e usa a cota da assinatura.\nNenhum stage ou commit até aprovar o plano."
 		}
+		if m.aiTask == "pr" {
+			body = "Modelo: " + safeText(m.aiModelLabel()) + "\nEnviar ao provedor os commits e o diff da branch em relação à base (ponto de divergência, referência local, sem fetch), o template de PR e os documentos de contexto versionados.\n" + fmt.Sprintf("Inglês · até %d MiB · arquivos acima de 1 MiB omitidos com aviso.", app.AnalysisLimit/(1024*1024)) + "\n\nA IA só preenche título e descrição do formulário. Nada é enviado ao GitHub sem a revisão e confirmação do PR."
+		}
 		if m.aiTask == "stage" {
 			body += "\n\nTambém envia documentos de contexto versionados (README, CONTRIBUTING, docs/*.md, templates .github, convenções de commit); documentos ignorados/privados nunca são enviados. O stage só muda depois de [Aplicar] e confirmar."
 		}
-		if m.changeSummary().Staged == 0 && !isWorkingAnalysis(m.aiTask) {
+		if m.changeSummary().Staged == 0 && !isWorkingAnalysis(m.aiTask) && m.aiTask != "pr" {
 			body = "Nenhum arquivo no stage.\nVolte e use s em um arquivo ou A para preparar as mudanças.\n\nModelo escolhido: " + safeText(m.aiModelLabel()) + "\nNada será enviado sem arquivos no stage."
 		}
 		if m.busy != "" {
 			body = "Analisando somente o staged…\nEsc cancela e preserva seu rascunho."
+			if m.aiTask == "pr" {
+				body = "Analisando commits e diff da branch…\nEsc cancela e volta ao formulário do PR."
+			}
 			if isWorkingAnalysis(m.aiTask) {
 				body = "Analisando mudanças elegíveis…\nEsc cancela a análise; arquivos e stage preservados."
 			}

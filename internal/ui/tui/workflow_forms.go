@@ -96,6 +96,9 @@ func (m *Model) workflowFormKey(k tea.KeyMsg) tea.Cmd {
 	if m.busy != "" || len(m.fields) == 0 {
 		return nil
 	}
+	if s == "ctrl+g" && !m.formReview && m.formKind == "pr" {
+		return m.openPRAI()
+	}
 	if m.formReview {
 		switch s {
 		case "enter":
@@ -301,6 +304,10 @@ func (m *Model) workflowFormView() string {
 	lines := []string{accentStyle.Render(fit(safeText(title), inner)), ""}
 	help := "Tab campos · Enter próximo/nova linha · Espaço alterna · Ctrl+S revisar · Esc cancelar"
 	buttons := "[Revisar] [Cancelar]"
+	if m.formKind == "pr" && m.prDraft.Number == 0 {
+		help = "Ctrl+G gerar título/descrição com IA · Tab campos · Ctrl+S revisar · Esc cancelar"
+		buttons = prAIButton + " [Revisar] [Cancelar]"
+	}
 	if m.formReview {
 		body := ""
 		if m.formKind == "pr" {
@@ -385,6 +392,9 @@ func (m *Model) workflowFormMouse(msg tea.MouseMsg) tea.Cmd {
 		if mouseOutlinedButtonHit(box, label, x, y) {
 			return m.workflowFormKey(tea.KeyMsg{Type: key})
 		}
+	}
+	if !m.formReview && mouseOutlinedButtonHit(box, prAIButton, x, y) {
+		return m.workflowFormKey(tea.KeyMsg{Type: tea.KeyCtrlG})
 	}
 	if mouseOutlinedButtonHit(box, "[Editar]", x, y) {
 		return m.workflowFormKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
