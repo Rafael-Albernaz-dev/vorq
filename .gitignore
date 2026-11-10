@@ -24,6 +24,7 @@ prompts/
 !.env.example
 *.pem
 *.key
+.aws/
 
 # Local state & caches
 .vorq/

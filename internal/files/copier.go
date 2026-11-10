@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // CopyFile copies a single file from src to dst, preserving file mode/permissions.
@@ -39,6 +40,36 @@ func CopyFile(src, dst string) error {
 	}
 
 	return out.Sync()
+}
+
+// ValidateDeclared checks explicitly declared files before anything is
+// created: each must be a workspace-relative path (no absolute path, "..",
+// or .git metadata) naming an existing regular file, never a symlink.
+func ValidateDeclared(srcDir string, extraFiles []string) error {
+	for _, extra := range extraFiles {
+		clean := filepath.Clean(extra)
+		if extra == "" || filepath.IsAbs(extra) || clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("--copy %q: use a path relative to the workspace, without \"..\"", extra)
+		}
+		for _, part := range strings.Split(filepath.ToSlash(clean), "/") {
+			if part == ".git" {
+				return fmt.Errorf("--copy %q: Git metadata cannot be copied", extra)
+			}
+		}
+		root, err := os.OpenRoot(srcDir)
+		if err != nil {
+			return err
+		}
+		info, err := root.Lstat(clean)
+		root.Close()
+		if err != nil {
+			return fmt.Errorf("--copy %q: file not found in the current workspace", extra)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("--copy %q: only regular files are copied (no symlinks or directories)", extra)
+		}
+	}
+	return nil
 }
 
 // SyncLocalFiles copies unversioned configuration files from srcDir to dstDir.
@@ -80,16 +111,17 @@ func SyncLocalFiles(srcDir, dstDir string, extraFiles []string) ([]string, error
 		}
 	}
 
-	// 4. Copy explicitly declared extra files
+	// 4. Copy explicitly declared extra files (validated: never outside the
+	// workspaces, never silently skipped).
+	if err := ValidateDeclared(srcDir, extraFiles); err != nil {
+		return copied, err
+	}
 	for _, extra := range extraFiles {
-		srcPath := filepath.Join(srcDir, extra)
-		dstPath := filepath.Join(dstDir, extra)
-		if info, err := os.Stat(srcPath); err == nil && info.Mode().IsRegular() {
-			if err := CopyFile(srcPath, dstPath); err != nil {
-				return copied, fmt.Errorf("failed to copy %s: %w", extra, err)
-			}
-			copied = append(copied, extra)
+		clean := filepath.Clean(extra)
+		if err := CopyFile(filepath.Join(srcDir, clean), filepath.Join(dstDir, clean)); err != nil {
+			return copied, fmt.Errorf("failed to copy %s: %w", extra, err)
 		}
+		copied = append(copied, extra)
 	}
 
 	return copied, nil

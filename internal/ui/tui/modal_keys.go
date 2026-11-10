@@ -108,6 +108,9 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			return m.stage()
 		}
 	case "help", "error", "result":
+		if m.modal == "error" && s == "t" && m.terminalRetryKind != "" {
+			return m.retryInTerminal()
+		}
 		if s == "?" || s == "enter" {
 			m.modal = ""
 		}

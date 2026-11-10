@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
@@ -64,6 +65,17 @@ func (r *NativeRunner) Exec(ctx context.Context, dir string, args ...string) (st
 func (r *NativeRunner) ExecInput(ctx context.Context, dir string, input io.Reader, overrides map[string]string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, r.gitBinPath, args...)
 	cmd.Stdin = input
+	interactive := domain.TerminalAllowed(ctx)
+	if !interactive {
+		// No controlling terminal: Git, SSH and pinentry cannot draw over the
+		// Studio; they fail fast and the error is classified below.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		merged := map[string]string{"GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never", "GPG_TTY": ""}
+		for key, value := range overrides {
+			merged[key] = value
+		}
+		overrides = merged
+	}
 	if overrides != nil {
 		for _, value := range os.Environ() {
 			key, _, _ := strings.Cut(value, "=")
@@ -72,6 +84,9 @@ func (r *NativeRunner) ExecInput(ctx context.Context, dir string, input io.Reade
 			}
 		}
 		for key, value := range overrides {
+			if key == "GPG_TTY" && value == "" {
+				continue // unset: pinentry must not target the Studio's TTY
+			}
 			cmd.Env = append(cmd.Env, key+"="+value)
 		}
 	}
@@ -96,13 +111,36 @@ func (r *NativeRunner) ExecInput(ctx context.Context, dir string, input io.Reade
 		if ctx.Err() != nil {
 			err = errors.Join(err, ctx.Err())
 		}
-		return "", fmt.Errorf("git error [%v]: %s: %w", args, errStr, err)
+		wrapped := fmt.Errorf("git error [%v]: %s: %w", args, errStr, err)
+		if !interactive && ctx.Err() == nil {
+			if reason := terminalRequirement(errStr); reason != "" {
+				return "", &domain.TerminalRequiredError{Reason: reason, Err: wrapped}
+			}
+		}
+		return "", wrapped
 	}
 	if stdout.truncated {
 		return "", &OutputLimitError{Limit: MaxCommandOutput}
 	}
 
 	return stdout.String(), nil
+}
+
+// terminalRequirement recognises native failures caused only by prompting being
+// unavailable (credentials, SSH passphrase/host key, GPG pinentry).
+func terminalRequirement(stderr string) string {
+	text := strings.ToLower(stderr)
+	for _, marker := range []string{"terminal prompts disabled", "could not read username", "could not read password", "authentication failed", "permission denied (publickey", "host key verification failed", "read_passphrase", "can't open /dev/tty", "ssh_askpass"} {
+		if strings.Contains(text, marker) {
+			return "credencial necessária (usuário/senha, token ou passphrase SSH)"
+		}
+	}
+	for _, marker := range []string{"gpg failed to sign", "failed to sign the data", "signing failed", "no pinentry", "inappropriate ioctl for device"} {
+		if strings.Contains(text, marker) {
+			return "assinatura do commit requer o terminal (PIN/senha do GPG)"
+		}
+	}
+	return ""
 }
 
 // Version returns the output of `git --version`.

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 	"time"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
@@ -23,7 +24,8 @@ type Model struct {
 
 func NewModel(ctx context.Context, core app.StudioService, dir string) *Model {
 	m := &Model{core: core,
-		operationsState: operationsState{ctx: ctx},
+		// The Studio owns the screen: native commands never prompt on its TTY.
+		operationsState: operationsState{ctx: domain.WithoutTerminal(ctx)},
 		navigationState: navigationState{activeTab: "alteracoes", viewerTab: "trabalho", focusPane: "tree", expanded: map[string]bool{}, positions: map[string]treePosition{}},
 		appearanceState: appearanceState{width: 100, height: 30},
 		workspaceState:  workspaceState{dir: dir, drafts: map[string]commitDraft{}},
@@ -258,6 +260,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mutating = false
 		if msg.err != nil && !msg.created {
 			m.showError("Falha na operação", msg.err)
+			m.offerTerminalRetry(msg.kind, msg.err)
 		} else {
 			m.modal = ""
 			m.notice = msg.notice
@@ -294,6 +297,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 func (m *Model) showError(context string, err error) {
+	m.terminalRetryKind = "" // only offerTerminalRetry, called right after, may set it
 	m.lastError = context + "\n\n" + err.Error()
 	m.notice = context + ": " + err.Error()
 	m.modal = "error"
