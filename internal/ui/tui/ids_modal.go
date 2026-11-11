@@ -17,6 +17,7 @@ const (
 	modalDiffReview   modalID = "diff-review"
 	modalDiscard      modalID = "discard"
 	modalError        modalID = "error"
+	modalGuard        modalID = "guard"
 	modalHelp         modalID = "help"
 	modalPlan         modalID = "plan"
 	modalPlanDiff     modalID = "plan-diff"

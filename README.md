@@ -14,6 +14,7 @@
 - [Installation](#installation)
 - [The Workspace Studio](#the-workspace-studio)
 - [Commits, stage and discard](#commits-stage-and-discard)
+- [Security checks](#security-checks)
 - [Push, update, branches and history](#push-update-branches-and-history)
 - [Pull requests](#pull-requests)
 - [AI features](#ai-features)
@@ -116,6 +117,32 @@ Mouse: click tabs, rows, buttons and the ↑/↓ counters; the wheel scrolls any
 
 ---
 
+## Security checks
+
+Every commit path (Studio review, `vorq commit`, `commit -a`, commit plans), every push and every AI request runs the same local check. It uses built-in rules in Go (inspired by gitleaks), needs no network and no extra tools, and **never shows a detected value**: findings appear as `file:line` with a masked excerpt (`AKIA…LKJH`).
+
+| Finding | Effect |
+| :--- | :--- |
+| Secrets: private keys, AWS/GitHub/GitLab/Slack/Stripe/Google/OpenAI/Anthropic/npm/SendGrid/Twilio tokens, JWTs, URLs with a password, hard-coded `password`/`secret`/`token`/`api_key` values, and files like `.env`, `*.pem`, `*.key`, `id_ed25519`, `.netrc`, `credentials.json`, `*.tfstate` | **blocks** |
+| Merge conflict markers (`<<<<<<<` / `>>>>>>>`) | **blocks** |
+| Added file above 5 MiB, forgotten debug code (`console.log`, `debugger`, `pdb.set_trace()`, …), paths differing only by letter case | warns, does not block |
+
+- **Commit** — only what is staged is checked (added lines and new files). The review lists the findings; when something blocks, confirming asks you to type `CONFIRMAR`. CLI: the commit stops unless `--allow-secrets` is given, which then asks for `CONFIRMAR`; scripts must pass `--allow-secrets --yes`. An override applies to that single operation and is reported in the result.
+- **Push** — before publishing, every commit that is not yet on any remote is checked one by one, so a secret added and removed later is still caught. A blocked push explains how to fix it (`git commit --amend`, `git rebase -i`, and revoking an exposed secret); vorq never rewrites history itself. The same typed override exists (`vorq push --allow-secrets`).
+- **AI** — a file with a possible secret is left out **whole** (diff and content), listed as not sent, and never recommended for the stage or included in a plan. This applies to commit messages, review, next-commit advice, plans, context documents and PR drafts.
+- **Exceptions** for false positives: add `vorq:allow-secret` on the line, or list paths and rules in a versioned `.vorqsecrets-allow` at the repository root:
+
+```text
+# path glob [rule ...]   (no rule = every rule; "*" = every path)
+testdata/**   aws-access-key,jwt
+.env.test
+*             debug-statement
+```
+
+Globs without `/` match a file name at any depth; `**` matches any number of folders. Git hooks run outside vorq are not changed.
+
+---
+
 ## Push, update, branches and history
 
 - **Push** (`p` or click ↑) shows `Local → Remote/branch` and ahead count before sending; without upstream it proposes `origin` (or the only remote) and sets the upstream after confirmation. Never forced.
@@ -165,7 +192,7 @@ Choose the provider in **IA → Provedor e modelo** (keys `c`, `g`, `a` in provi
 
 **Commit plan** — ordered whole-file commit groups with messages. Review and edit groups (`e` message, `m` move, `x` exclude, `r` reorder, `Ctrl+S` save), then **Executar** confirms. Each commit uses a pinned snapshot and a private index, runs native hooks and signing, and stops on the first failure; progress is saved under `~/.local/state/vorq/plans/` (owner-only) so the plan can be resumed. Hunk splitting is not supported.
 
-**What is sent and what is not.** Ignored files, binaries, symlinks/submodules and files above 1 MiB are never sent (they are listed as not analysed). Context documents are only **tracked** files — root README/CONTRIBUTING, `docs/*.md`, `.github` templates and commit conventions (`.gitmessage`, commitlint), up to 32 KiB each and 96 KiB in total with truncation marked; untracked or ignored notes are never used as context. Analyses accept up to 2 MiB and are refused (never silently truncated) above the limits.
+**What is sent and what is not.** Files with a possible secret ([Security checks](#security-checks)), ignored files, binaries, symlinks/submodules and files above 1 MiB are never sent (they are listed as not analysed). Context documents are only **tracked** files — root README/CONTRIBUTING, `docs/*.md`, `.github` templates and commit conventions (`.gitmessage`, commitlint), up to 32 KiB each and 96 KiB in total with truncation marked; untracked or ignored notes are never used as context. Analyses accept up to 2 MiB and are refused (never silently truncated) above the limits.
 
 **Isolation.** Clients run in an empty temporary directory with a minimal environment (no API keys, no parent agent variables). Codex runs with its shell, browser, apps and hooks disabled; Antigravity with a private home and strict deny rules; Claude Code with `claude -p --tools ""`, no MCP servers, no slash commands and no session persistence, its output enforced by `--json-schema` (vorq does not use `--bare` because that mode only accepts API keys). Responses are validated and treated as text. Timeouts: 3 minutes for messages, 5 minutes for analyses; `Esc` / `Ctrl+C` cancel the client process group. Errors include a short sanitised excerpt of the client's own message (for example "Not logged in" or quota problems).
 
@@ -190,9 +217,10 @@ vorq list                 # worktrees
 vorq commit                       # guided: stage, type, message, confirm
 vorq commit -a -m 'feat: x'       # non-interactive
 vorq commit --dry-run --type fix  # passive preview
+vorq commit -m 'x' --allow-secrets [--yes]  # override blocking findings (typed CONFIRMAR, or --yes in scripts)
 vorq suggest --provider claude    # AI message from the staged diff (or --provider rules)
 
-vorq push [--yes]                 # reviewed push
+vorq push [--yes] [--allow-secrets]  # reviewed push; unpublished commits are checked first
 vorq pull [--yes]                 # fetch + fast-forward only
 vorq branch feat/x [--stay --base main]
 vorq switch <branch> [--yes]
@@ -225,6 +253,7 @@ Every command that writes (commit, push, pull, switch, PR, plan execution, stage
 - Reviewed state is re-validated before writing (stage diff, HEAD, push destination, plan snapshot, discard fingerprint); anything that changed requires a new review.
 - Read-only Studio queries use `--no-optional-locks` and never rewrite `.git/index`.
 - Ignored and sensitive files are protected from discard, worktree removal and AI input.
+- Secrets and conflict markers block commits and pushes until fixed or explicitly overridden with a typed confirmation; files with possible secrets are never sent to AI providers ([Security checks](#security-checks)).
 
 ---
 

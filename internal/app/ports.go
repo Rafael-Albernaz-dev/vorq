@@ -54,6 +54,7 @@ type CommitRepository interface {
 	HashFile(context.Context, string, string) (string, error)
 	ReadCommitInfo(context.Context, string, string) (*domain.CommitInfo, error)
 	CommitFiles(context.Context, string, string, []string) ([]string, error)
+	StagedBlobSizes(context.Context, string) (map[string]int64, error)
 }
 type ExplorerRepository interface {
 	TrackedPaths(context.Context, string) ([]string, error)
@@ -71,4 +72,6 @@ type PushRepository interface {
 	UpstreamTarget(context.Context, string, string) (string, string, error)
 	PushDestinationID(context.Context, string, string) (string, error)
 	Push(context.Context, string, string, string, string, bool) (string, error)
+	UnpublishedCommits(context.Context, string, int) ([]string, error)
+	CommitPatch(context.Context, string, string) (string, error)
 }

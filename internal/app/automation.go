@@ -57,6 +57,20 @@ func (a *App) analysisWithContext(ctx context.Context, dir, provider, model, tas
 	if err != nil {
 		return nil, nil, err
 	}
+	// VORQ-018: files with a possible secret are excluded whole, so they are
+	// neither sent nor recommended for the stage or any planned commit.
+	scanner, err := guardScanner(snapshot.Workspace)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := range snapshot.Files {
+		f := &snapshot.Files[i]
+		if f.Excluded == "" && (withheldFromAI(scanner, f.Path, f.Diff) || withheldFromAI(scanner, f.Path, string(f.Content)) || (f.OldPath != "" && scanner.PathFinding(f.OldPath) != nil)) {
+			// Nothing of the file is kept: not in the payload, not in the
+			// saved plan on disk.
+			f.Excluded, f.Content, f.Diff = WithheldReason, nil, ""
+		}
+	}
 	var payload []map[string]string
 	for _, f := range snapshot.Files {
 		if f.Excluded == "" {
@@ -417,6 +431,9 @@ func (a *App) ExecuteCommitPlan(ctx context.Context, dir string, reviewed *domai
 	if strings.HasPrefix(p.Error, "INSPECT:") {
 		return &p, fmt.Errorf("inspect the previously created commit/index before making a new plan")
 	}
+	if err = planGuard(&p); err != nil {
+		return &p, err
+	}
 	r := a.gitRunner
 	p.Error = ""
 	for i := len(p.Completed); i < len(p.Commits); i++ {
@@ -453,4 +470,38 @@ func (a *App) ExecuteCommitPlan(ctx context.Context, dir string, reviewed *domai
 		}
 	}
 	return &p, nil
+}
+
+// planGuard revalidates the reviewed content of the remaining planned commits
+// (VORQ-018) before any of them is created: blocking findings stop the plan.
+func planGuard(p *domain.CommitPlan) error {
+	s, err := guardScanner(p.Snapshot.Workspace)
+	if err != nil {
+		return err
+	}
+	byID := map[string]domain.SnapshotFile{}
+	for _, f := range p.Snapshot.Files {
+		byID[f.ID] = f
+	}
+	report := domain.GuardReport{}
+	for _, c := range p.Commits[len(p.Completed):] {
+		for _, id := range c.Files {
+			f := byID[id]
+			var findings []domain.GuardFinding
+			if strings.HasPrefix(f.Diff, "New file ") {
+				findings = s.ScanContent(f.Path, string(f.Content))
+			} else {
+				findings = s.ScanPatch(f.Diff)
+			}
+			for _, finding := range findings {
+				if finding.Blocking {
+					report.Findings = append(report.Findings, finding)
+				}
+			}
+		}
+	}
+	if report.HasBlocking() {
+		return &domain.GuardBlockedError{Operation: "commit plan", Report: report}
+	}
+	return nil
 }

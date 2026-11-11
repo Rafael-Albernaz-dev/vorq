@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
@@ -37,6 +38,9 @@ func newSuggestCmd(core suggestionService) *cobra.Command {
 			p, err := core.SuggestCommitAI(ctx, ".", provider, model)
 			if err != nil {
 				return fmt.Errorf("%w\nRetry this command, change --provider, or use --provider rules; no fallback or commit was performed", err)
+			}
+			if len(p.Withheld) > 0 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Not sent to the AI (possible secret): %s\n", terminalText(strings.Join(p.Withheld, ", ")))
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), terminalText(p.Proposal.Message()))
 			return nil

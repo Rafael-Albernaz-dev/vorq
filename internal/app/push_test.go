@@ -20,7 +20,7 @@ func setupPushApp(t *testing.T) (*app.App, *git.NativeRunner, string, string) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+	if _, err := a.CreateCommit(ctx, dir, "chore: initial", false); err != nil {
 		t.Fatal(err)
 	}
 	remote := t.TempDir()
@@ -72,7 +72,7 @@ func TestApp_Push_DifferentUpstreamBranch(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	result, err := a.CreateCommit(ctx, dir, "fix: next")
+	result, err := a.CreateCommit(ctx, dir, "fix: next", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestApp_Push_RejectsStalePreview(t *testing.T) {
 				if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := a.CreateCommit(ctx, dir, "fix: changed"); err != nil {
+				if _, err := a.CreateCommit(ctx, dir, "fix: changed", false); err != nil {
 					t.Fatal(err)
 				}
 			} else {
@@ -137,7 +137,7 @@ func TestApp_Push_RejectsNonFastForward(t *testing.T) {
 	if err := a.StageFiles(ctx, other, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	otherCommit, err := a.CreateCommit(ctx, other, "fix: competitor")
+	otherCommit, err := a.CreateCommit(ctx, other, "fix: competitor", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestApp_Push_RejectsNonFastForward(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateCommit(ctx, dir, "fix: local"); err != nil {
+	if _, err := a.CreateCommit(ctx, dir, "fix: local", false); err != nil {
 		t.Fatal(err)
 	}
 	target, err = a.GetPushTarget(ctx, dir)

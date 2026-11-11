@@ -74,6 +74,7 @@ type PRDraft struct {
 	Repository, Head, HeadOID, Base, Title, Body string
 	Draft                                        bool
 	Labels, Reviewers, RemoveLabels              []string
+	Withheld                                     []string // files not sent to the AI: possible secret (VORQ-018)
 }
 
 // BranchCommit is one commit of the branch being proposed as a PR.

@@ -162,6 +162,9 @@ func newPRSaveCmd(core prCore, edit bool) *cobra.Command {
 					return fmt.Errorf("%w\nNothing was sent to GitHub; retry, change --provider, or write --title/--body-file", e)
 				}
 				d.Title, d.Body = ai.Title, ai.Body
+				if len(ai.Withheld) > 0 {
+					fmt.Fprintf(c.ErrOrStderr(), "Not sent to the AI (possible secret): %s\n", terminalText(strings.Join(ai.Withheld, ", ")))
+				}
 			}
 		}
 		if c.Flags().Changed("title") {

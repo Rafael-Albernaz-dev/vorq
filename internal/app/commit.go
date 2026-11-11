@@ -210,7 +210,7 @@ func (a *App) previewUntracked(ctx context.Context, dir, base, path string) (str
 }
 
 // CreateReviewedCommit refuses an index that changed since the user's review.
-func (a *App) CreateReviewedCommit(ctx context.Context, currentDir, message, expectedDiff string) (*domain.CommitResult, error) {
+func (a *App) CreateReviewedCommit(ctx context.Context, currentDir, message, expectedDiff string, allowFindings bool) (*domain.CommitResult, error) {
 	cs, err := a.GetCommitChanges(ctx, currentDir)
 	if err != nil {
 		return nil, err
@@ -218,11 +218,14 @@ func (a *App) CreateReviewedCommit(ctx context.Context, currentDir, message, exp
 	if cs.StagedDiff != expectedDiff {
 		return nil, fmt.Errorf("the stage changed after the review; review the files and confirm again")
 	}
-	return a.CreateCommit(ctx, currentDir, message)
+	return a.CreateCommit(ctx, currentDir, message, allowFindings)
 }
 
-// CreateCommit validates the index and delegates hooks/signing to native Git.
-func (a *App) CreateCommit(ctx context.Context, currentDir, message string) (*domain.CommitResult, error) {
+// CreateCommit validates the index, runs the guardrails (VORQ-018) and
+// delegates hooks/signing to native Git. Blocking findings stop the commit
+// with *domain.GuardBlockedError unless allowFindings is the user's explicit,
+// typed override for this commit; warnings never block.
+func (a *App) CreateCommit(ctx context.Context, currentDir, message string, allowFindings bool) (*domain.CommitResult, error) {
 	if strings.TrimSpace(message) == "" {
 		return nil, fmt.Errorf("commit message must not be empty")
 	}
@@ -233,6 +236,13 @@ func (a *App) CreateCommit(ctx context.Context, currentDir, message string) (*do
 	if cs.StagedCount() == 0 {
 		return nil, fmt.Errorf("no staged files to commit")
 	}
+	report, err := a.checkStaged(ctx, cs)
+	if err != nil {
+		return nil, fmt.Errorf("safety check failed; nothing committed: %w", err)
+	}
+	if report.HasBlocking() && !allowFindings {
+		return nil, &domain.GuardBlockedError{Operation: "commit", Report: *report}
+	}
 	hash, err := a.gitRunner.Commit(ctx, cs.WorkspacePath, message)
 	if err != nil {
 		return nil, err
@@ -241,7 +251,10 @@ func (a *App) CreateCommit(ctx context.Context, currentDir, message string) (*do
 	if len(shortHash) > 7 {
 		shortHash = shortHash[:7]
 	}
-	result := &domain.CommitResult{Hash: hash, ShortHash: shortHash}
+	result := &domain.CommitResult{Hash: hash, ShortHash: shortHash, Warnings: report.Warnings()}
+	if allowFindings {
+		result.Overridden = report.Blocking()
+	}
 	metadataFailure := func(operation string, cause error) (*domain.CommitResult, error) {
 		return result, &domain.CommitMetadataError{Hash: hash, Operation: operation, Err: cause}
 	}

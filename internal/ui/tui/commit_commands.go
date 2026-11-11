@@ -50,6 +50,7 @@ func (m *Model) propose(commitType string) tea.Cmd {
 	m.dialogID++
 	id, revision := m.dialogID, m.draftRevision
 	m.commitPhase = "loading"
+	m.reviewGuard, m.guardOverride = nil, false
 	m.busy = "Gerando sugestão…"
 	core, dir := m.core, m.dir
 	ctx, cancel := m.beginDialog(20 * time.Second)
@@ -88,12 +89,20 @@ func (m *Model) review() tea.Cmd {
 	return func() tea.Msg {
 		defer cancel()
 		cs, err := core.GetCommitChanges(ctx, dir)
-		return reviewMsg{id: id, revision: revision, changes: cs, err: err}
+		var guard *domain.GuardReport
+		if err == nil {
+			guard, err = core.CheckCommit(ctx, dir)
+		}
+		return reviewMsg{id: id, revision: revision, changes: cs, guard: guard, err: err}
 	}
 }
 
 func (m *Model) commit() tea.Cmd {
 	if !m.canAct() {
+		return nil
+	}
+	if m.reviewGuard.HasBlocking() && !m.guardOverride {
+		m.openGuard(modalCommit)
 		return nil
 	}
 	op, ctx := m.commitOp(), m.ctx
@@ -103,17 +112,18 @@ func (m *Model) commit() tea.Cmd {
 // commitOp creates the reviewed commit; the core rejects a changed stage.
 func (m *Model) commitOp() operation {
 	m.dialogID++
-	id, core, dir, message, diff := m.dialogID, m.core, m.dir, m.reviewMessage, m.reviewDiff
+	id, core, dir, message, diff, allow := m.dialogID, m.core, m.dir, m.reviewMessage, m.reviewDiff, m.guardOverride
 	m.busy = "Criando commit local…"
 	m.mutating = true
 	return func(ctx context.Context) tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
-		result, err := core.CreateReviewedCommit(ctx, dir, message, diff)
+		result, err := core.CreateReviewedCommit(ctx, dir, message, diff, allow)
 		if err != nil {
-			return actionMsg{id: id, kind: "commit", err: err, created: commitWasCreated(result, err)}
+			return actionMsg{id: id, kind: "commit", err: guardError(err), created: commitWasCreated(result, err)}
 		}
-		return actionMsg{id: id, kind: "commit", notice: fmt.Sprintf("Commit local %s · %s", result.ShortHash, result.Subject)}
+		notice := fmt.Sprintf("Commit local %s · %s", result.ShortHash, result.Subject)
+		return actionMsg{id: id, kind: "commit", notice: notice + guardResultNote(result.Overridden, result.Warnings)}
 	}
 }
 
@@ -125,9 +135,9 @@ func (m *Model) inspectPush() tea.Cmd {
 	id, core, dir := m.dialogID, m.core, m.dir
 	m.modal = modalPush
 	m.modalScroll = 0
-	m.pushTarget = nil
-	m.busy = "Inspecionando destino…"
-	ctx, cancel := m.beginDialog(15 * time.Second)
+	m.pushTarget, m.guardOverride = nil, false
+	m.busy = "Avaliando destino e commits não publicados…"
+	ctx, cancel := m.beginDialog(60 * time.Second)
 	return func() tea.Msg {
 		defer cancel()
 		target, err := core.GetPushTarget(ctx, dir)
@@ -142,6 +152,10 @@ func (m *Model) push() tea.Cmd {
 	if m.pushTarget == nil {
 		return nil
 	}
+	if m.pushTarget.Guard.HasBlocking() && !m.guardOverride {
+		m.openGuard(modalPush)
+		return nil
+	}
 	op, ctx := m.pushOp(), m.ctx
 	return func() tea.Msg { return op(ctx) }
 }
@@ -149,17 +163,18 @@ func (m *Model) push() tea.Cmd {
 // pushOp publishes to the reviewed target; the core revalidates it.
 func (m *Model) pushOp() operation {
 	m.dialogID++
-	id, core, dir, target := m.dialogID, m.core, m.dir, *m.pushTarget
+	id, core, dir, target, allow := m.dialogID, m.core, m.dir, *m.pushTarget, m.guardOverride
 	m.busy = "Publicando no destino confirmado…"
 	m.mutating = true
 	return func(ctx context.Context) tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
-		result, err := core.PushChanges(ctx, dir, domain.PushOptions{Target: target})
+		result, err := core.PushChanges(ctx, dir, domain.PushOptions{Target: target, AllowFindings: allow})
 		if err != nil {
-			return actionMsg{id: id, kind: "push", err: err}
+			return actionMsg{id: id, kind: "push", err: guardError(err)}
 		}
-		return actionMsg{id: id, kind: "push", notice: "Push concluído: " + result.Target.Remote + "/" + result.Target.RemoteBranch}
+		notice := "Push concluído: " + result.Target.Remote + "/" + result.Target.RemoteBranch
+		return actionMsg{id: id, kind: "push", notice: notice + guardResultNote(result.Overridden, nil)}
 	}
 }
 

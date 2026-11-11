@@ -112,10 +112,19 @@ func (a *App) SuggestCommitAI(ctx context.Context, dir, provider string, models 
 	if cs.StagedCount() == 0 || strings.TrimSpace(cs.StagedDiff) == "" {
 		return nil, fmt.Errorf("no staged diff to analyze")
 	}
-	if len(cs.StagedDiff) > MaxAIDiffBytes {
+	// VORQ-018: a file with a possible secret never leaves the machine.
+	scanner, err := guardScanner(cs.WorkspacePath)
+	if err != nil {
+		return nil, err
+	}
+	diff, withheld := filterPatchForAI(scanner, cs.StagedDiff)
+	if strings.TrimSpace(diff) == "" {
+		return nil, fmt.Errorf("every staged file holds a possible secret; nothing sent to the AI (%s)", strings.Join(withheld, ", "))
+	}
+	if len(diff) > MaxAIDiffBytes {
 		return nil, fmt.Errorf("staged diff exceeds %d KiB; split the commit or use local rules (nothing sent)", MaxAIDiffBytes/1024)
 	}
-	p, err := a.ai.Suggest(ctx, domain.AIRequest{Provider: provider, Model: model, Diff: cs.StagedDiff})
+	p, err := a.ai.Suggest(ctx, domain.AIRequest{Provider: provider, Model: model, Diff: diff})
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +139,7 @@ func (a *App) SuggestCommitAI(ctx context.Context, dir, provider string, models 
 	}
 	p.Engine = domain.SuggestionEngineType(provider)
 	p.GeneratedAt = time.Now().UTC()
-	return &domain.AIProposal{Proposal: *p, Diff: cs.StagedDiff}, nil
+	return &domain.AIProposal{Proposal: *p, Diff: cs.StagedDiff, Withheld: withheld}, nil
 }
 
 func (a *App) ValidateAISuggestion(ctx context.Context, dir, diff string) error {

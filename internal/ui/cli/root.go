@@ -474,7 +474,7 @@ func newCommitCmd(appCore interface {
 	app.CommitService
 	app.StageService
 }) *cobra.Command {
-	var all, dryRun bool
+	var all, dryRun, allowSecrets, yes bool
 	var commitType, message string
 	cmd := &cobra.Command{
 		Use:   "commit",
@@ -486,8 +486,13 @@ func newCommitCmd(appCore interface {
 			"--dry-run é passivo: não altera o índice nem o histórico. Com --all,\n" +
 			"prevê as alterações contra HEAD, incluindo untracked não ignorados.\n" +
 			"Em dry-run, o tipo padrão é chore quando --type não é informado.\n" +
-			"Cancelar após stage preserva os arquivos em stage.",
-		Example: "  vorq commit\n  vorq commit --type fix\n  vorq commit -a -m 'feat: add guided commits'\n  vorq commit --dry-run --type feat -a",
+			"Cancelar após stage preserva os arquivos em stage.\n" +
+			"Verificação de segurança: segredos (chaves, tokens, senhas, .env) e\n" +
+			"marcadores de conflito no stage bloqueiam o commit; arquivo > 5 MiB,\n" +
+			"debug esquecido e colisão de maiúsculas/minúsculas só avisam.\n" +
+			"--allow-secrets permite seguir após digitar CONFIRMAR (scripts: --yes).\n" +
+			"Exceções: comentário vorq:allow-secret na linha ou .vorqsecrets-allow.",
+		Example: "  vorq commit\n  vorq commit --type fix\n  vorq commit -a -m 'feat: add guided commits'\n  vorq commit --dry-run --type feat -a\n  vorq commit -m 'test: add fixtures' --allow-secrets --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -564,6 +569,14 @@ func newCommitCmd(appCore interface {
 					return err
 				}
 			}
+			report, err := appCore.CheckCommit(ctx, ".")
+			if err != nil {
+				return fmt.Errorf("safety check failed; nothing committed: %w", err)
+			}
+			override, err := guardGate(out, reader, report, "commit", allowSecrets, yes)
+			if err != nil {
+				return err
+			}
 			if !manual {
 				if commitType == "" {
 					types := []string{"feat", "fix", "chore", "refactor", "docs", "test", "style", "perf"}
@@ -606,11 +619,15 @@ func newCommitCmd(appCore interface {
 					}
 				}
 			}
-			result, err := appCore.CreateCommit(ctx, ".", message)
+			result, err := appCore.CreateCommit(ctx, ".", message, override)
 			if err != nil {
+				printBlocked(out, err)
 				return err
 			}
 			fmt.Fprintf(out, "%s %s %s\n", successStyle.Render("✓ Commit criado:"), branchStyle.Render(result.ShortHash), result.Subject)
+			if n := len(result.Overridden); n > 0 {
+				fmt.Fprintln(out, warnStyle.Render(fmt.Sprintf("⚠ Override registrado: commit criado com %d achado(s) bloqueante(s) confirmados.", n)))
+			}
 			return nil
 		},
 	}
@@ -618,6 +635,8 @@ func newCommitCmd(appCore interface {
 	cmd.Flags().StringVarP(&commitType, "type", "t", "", "Tipo: feat, fix, chore, refactor, docs, test, style, perf (mantém confirmação)")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "Mensagem explícita; comita sem confirmação (requer stage ou --all)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Prever arquivos e mensagem sem alterar stage/histórico (tipo padrão: chore)")
+	cmd.Flags().BoolVar(&allowSecrets, "allow-secrets", false, "Permitir commit com achados bloqueantes após digitar CONFIRMAR")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Com --allow-secrets: confirmar o override sem digitar (scripts)")
 	return cmd
 }
 
@@ -680,7 +699,7 @@ func selectCommitFiles(reader *bufio.Reader, out io.Writer, files []domain.FileS
 }
 
 func newPushCmd(appCore app.PushService) *cobra.Command {
-	var yes bool
+	var yes, allowSecrets bool
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Explicitly push local commits to remote target",
@@ -688,8 +707,12 @@ func newPushCmd(appCore app.PushService) *cobra.Command {
 			"Com upstream, usa o remote e a branch de destino configurados.\n" +
 			"Sem upstream, propõe origin (ou o único remote) e configura upstream\n" +
 			"após confirmação. Múltiplos remotes sem origin exigem upstream explícito.\n" +
-			"O destino e HEAD são revalidados antes de enviar. Nenhum fetch automático.",
-		Example: "  vorq push\n  vorq push --yes",
+			"O destino e HEAD são revalidados antes de enviar. Nenhum fetch automático.\n" +
+			"Antes de enviar, avalia cada commit que ainda não existe em nenhum remote:\n" +
+			"segredo ou marcador de conflito bloqueia e o vorq mostra como corrigir\n" +
+			"(nunca reescreve o histórico sozinho). --allow-secrets permite seguir\n" +
+			"após digitar CONFIRMAR; em scripts, --allow-secrets --yes.",
+		Example: "  vorq push\n  vorq push --yes\n  vorq push --allow-secrets",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target, err := appCore.GetPushTarget(cmd.Context(), ".")
@@ -705,8 +728,15 @@ func newPushCmd(appCore app.PushService) *cobra.Command {
 			if !target.HasUpstream {
 				prompt = "Branch sem upstream. Deseja publicar e configurar upstream? [Y/n]: "
 			}
-			if !yes {
-				reader := bufio.NewReader(cmd.InOrStdin())
+			reader := bufio.NewReader(cmd.InOrStdin())
+			if target.Guard != nil {
+				fmt.Fprintln(out, subtleStyle.Render(fmt.Sprintf("Verificação de segurança: %d commit(s) não publicados avaliados.", target.Guard.Commits)))
+			}
+			override, err := guardGate(out, reader, target.Guard, "push", allowSecrets, yes)
+			if err != nil {
+				return err
+			}
+			if !yes && !override {
 				for {
 					fmt.Fprint(out, prompt)
 					line, err := reader.ReadString('\n')
@@ -724,14 +754,20 @@ func newPushCmd(appCore app.PushService) *cobra.Command {
 					fmt.Fprintln(out, warnStyle.Render("Opção inválida. Use Y ou n."))
 				}
 			}
-			if _, err := appCore.PushChanges(cmd.Context(), ".", domain.PushOptions{Target: *target}); err != nil {
+			result, err := appCore.PushChanges(cmd.Context(), ".", domain.PushOptions{Target: *target, AllowFindings: override})
+			if err != nil {
+				printBlocked(out, err)
 				return err
 			}
 			fmt.Fprintln(out, successStyle.Render("✓ Push concluído: ")+target.Remote+"/"+target.RemoteBranch)
+			if n := len(result.Overridden); n > 0 {
+				fmt.Fprintln(out, warnStyle.Render(fmt.Sprintf("⚠ Override registrado: push com %d achado(s) bloqueante(s) confirmados.", n)))
+			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Publicar no destino exibido sem confirmação interativa")
+	cmd.Flags().BoolVar(&allowSecrets, "allow-secrets", false, "Permitir push com achados bloqueantes após digitar CONFIRMAR (scripts: --yes)")
 	return cmd
 }
 

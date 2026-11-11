@@ -18,7 +18,7 @@ func TestInventoryIgnoredPagingAndAbsolutePaths(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateCommit(ctx, dir, "test: inventory baseline"); err != nil {
+	if _, err := a.CreateCommit(ctx, dir, "test: inventory baseline", false); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 205; i++ {

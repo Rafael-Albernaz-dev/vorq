@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
@@ -85,5 +86,8 @@ func (m *Model) receivePRAI(msg prAIMsg) tea.Cmd {
 	m.modal, m.modalScroll, m.fieldIndex, m.formReview = modalWorkflow, 0, 0, false
 	m.aiTask = taskNone
 	m.notice = "Título e descrição gerados pela IA (" + m.aiProvider + "). Revise e edite antes de enviar; Ctrl+S revisa."
+	if n := len(msg.draft.Withheld); n > 0 {
+		m.notice += fmt.Sprintf(" %d arquivo(s) não enviados (possível segredo).", n)
+	}
 	return nil
 }

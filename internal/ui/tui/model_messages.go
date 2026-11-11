@@ -27,6 +27,7 @@ type proposalMsg struct {
 type reviewMsg struct {
 	id, revision uint64
 	changes      *domain.ChangeSet
+	guard        *domain.GuardReport
 	err          error
 }
 type pushTargetMsg struct {

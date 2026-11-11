@@ -33,7 +33,7 @@ func TestApp_WorkspaceTree_StatusAndIgnores(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+	if _, err := a.CreateCommit(ctx, dir, "chore: initial", false); err != nil {
 		t.Fatal(err)
 	}
 	writeCommitFile(t, dir, "src/ação.go", "staged\n")
@@ -141,7 +141,7 @@ func TestApp_TreeRenameAndTogglePreservesWorkingFiles(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+	if _, err := a.CreateCommit(ctx, dir, "chore: initial", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Rename(filepath.Join(dir, "old name.txt"), filepath.Join(dir, "new ação.txt")); err != nil {
@@ -186,7 +186,7 @@ func TestApp_ReviewedCommitRejectsChangedIndex(t *testing.T) {
 	if err := a.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.CreateReviewedCommit(ctx, dir, "fix: review", reviewed.StagedDiff); err == nil || !strings.Contains(err.Error(), "stage changed") {
+	if _, err := a.CreateReviewedCommit(ctx, dir, "fix: review", reviewed.StagedDiff, false); err == nil || !strings.Contains(err.Error(), "stage changed") {
 		t.Fatalf("changed index accepted: %v", err)
 	}
 	if _, err := r.RevParseHead(ctx, dir); err == nil {

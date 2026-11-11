@@ -53,6 +53,7 @@ type commitState struct {
 	reviewDiff, reviewMessage                                  string
 	commitCount                                                int
 	reviewPaths                                                []string
+	reviewGuard                                                *domain.GuardReport
 	commitType, partialApproved                                string
 	suggested                                                  bool
 }
@@ -67,6 +68,9 @@ type dialogState struct {
 	modalScroll                       int
 	discardPlan                       *domain.DiscardPlan
 	pushTarget                        *domain.PushTarget
+	guardFor                          modalID // commit or push awaiting a typed override
+	guardInput                        string
+	guardOverride                     bool // CONFIRMAR typed for the reviewed operation
 	pullTarget                        *domain.PullTarget
 	worktrees                         []*domain.Workspace
 	worktreeIndex                     int

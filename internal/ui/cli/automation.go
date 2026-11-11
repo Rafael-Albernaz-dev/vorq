@@ -119,6 +119,7 @@ func newAICmd(core interface {
 		if result != nil {
 			printPlan(cmd.OutOrStdout(), result, false)
 		}
+		printBlocked(cmd.OutOrStdout(), e)
 		return e
 	}}
 	execute.Flags().BoolVar(&yes, "yes", false, "Explicitly approve the saved plan without interactive confirmation")

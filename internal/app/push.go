@@ -54,6 +54,9 @@ func (a *App) GetPushTarget(ctx context.Context, currentDir string) (*domain.Pus
 	if err != nil {
 		return nil, fmt.Errorf("cannot resolve push destination for remote %q", target.Remote)
 	}
+	if target.Guard, err = a.checkUnpublished(ctx, proj.RootPath); err != nil {
+		return nil, fmt.Errorf("safety check of unpublished commits failed: %w", err)
+	}
 	return target, nil
 }
 
@@ -68,9 +71,17 @@ func (a *App) PushChanges(ctx context.Context, currentDir string, opts domain.Pu
 	if expected.WorkspacePath != target.WorkspacePath || expected.Branch != target.Branch || expected.Remote != target.Remote || expected.RemoteBranch != target.RemoteBranch || expected.HasUpstream != target.HasUpstream || expected.HeadHash != target.HeadHash || expected.DestinationID != target.DestinationID {
 		return nil, fmt.Errorf("push target changed or was not reviewed; inspect the destination and confirm again")
 	}
+	// Same HEAD as reviewed, re-evaluated here: no interface can skip it.
+	if target.Guard.HasBlocking() && !opts.AllowFindings {
+		return nil, &domain.GuardBlockedError{Operation: "push", Report: *target.Guard}
+	}
 	out, err := a.gitRunner.Push(ctx, target.WorkspacePath, target.Remote, target.Branch, target.RemoteBranch, !target.HasUpstream)
 	if err != nil {
 		return nil, err
 	}
-	return &domain.PushResult{Target: *target, Output: out}, nil
+	result := &domain.PushResult{Target: *target, Output: out}
+	if opts.AllowFindings {
+		result.Overridden = target.Guard.Blocking()
+	}
+	return result, nil
 }

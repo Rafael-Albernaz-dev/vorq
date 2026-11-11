@@ -61,7 +61,7 @@ func TestApp_Commit_MetadataFailurePreservesCreatedResult(t *testing.T) {
 			}
 			cause := errors.New("metadata read unavailable")
 			runner := &metadataFailureRunner{Runner: native, mode: mode, cause: cause}
-			result, err := app.NewApp(git.NewRepository(runner)).CreateCommit(ctx, dir, "feat: proposed subject")
+			result, err := app.NewApp(git.NewRepository(runner)).CreateCommit(ctx, dir, "feat: proposed subject", false)
 			var outcome *domain.CommitMetadataError
 			if err == nil || !errors.As(err, &outcome) {
 				t.Fatalf("expected typed post-commit failure, got %+v / %v", result, err)
@@ -105,7 +105,7 @@ func TestApp_Commit_HookFailureHasNoCreatedResult(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte("#!/bin/sh\necho 'hook rejected' >&2\nexit 1\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	result, err := original.CreateCommit(ctx, dir, "feat: rejected")
+	result, err := original.CreateCommit(ctx, dir, "feat: rejected", false)
 	var metadataErr *domain.CommitMetadataError
 	if err == nil || result != nil || errors.As(err, &metadataErr) {
 		t.Fatalf("hook failure reported a created commit: %+v %v", result, err)
@@ -124,7 +124,7 @@ func TestApp_Commit_PropagatesCreatedOutcomeWithoutHash(t *testing.T) {
 	}
 	cause := errors.New("HEAD unavailable")
 	runner := &metadataFailureRunner{Runner: native, mode: "head", cause: cause}
-	result, err := app.NewApp(git.NewRepository(runner)).CreateCommit(ctx, dir, "feat: already created")
+	result, err := app.NewApp(git.NewRepository(runner)).CreateCommit(ctx, dir, "feat: already created", false)
 	var outcome *domain.CommitMetadataError
 	if result != nil || !errors.As(err, &outcome) || !errors.Is(err, cause) || outcome.Hash != "" {
 		t.Fatalf("lost unknown-hash created outcome: %+v %v", result, err)

@@ -29,8 +29,9 @@ type CommitService interface {
 	GetCommitChanges(context.Context, string) (*domain.ChangeSet, error)
 	ProposeCommit(context.Context, string, string) (*domain.CommitProposal, error)
 	PreviewCommit(context.Context, string, string, bool) (*domain.ChangeSet, *domain.CommitProposal, error)
-	CreateCommit(context.Context, string, string) (*domain.CommitResult, error)
-	CreateReviewedCommit(context.Context, string, string, string) (*domain.CommitResult, error)
+	CreateCommit(context.Context, string, string, bool) (*domain.CommitResult, error)
+	CreateReviewedCommit(context.Context, string, string, string, bool) (*domain.CommitResult, error)
+	CheckCommit(context.Context, string) (*domain.GuardReport, error)
 }
 type PushService interface {
 	GetPushTarget(context.Context, string) (*domain.PushTarget, error)
@@ -84,5 +85,6 @@ type StudioService interface {
 	ListWorktrees(context.Context, string) ([]*domain.Workspace, error)
 	GetCommitChanges(context.Context, string) (*domain.ChangeSet, error)
 	ProposeCommit(context.Context, string, string) (*domain.CommitProposal, error)
-	CreateReviewedCommit(context.Context, string, string, string) (*domain.CommitResult, error)
+	CreateReviewedCommit(context.Context, string, string, string, bool) (*domain.CommitResult, error)
+	CheckCommit(context.Context, string) (*domain.GuardReport, error)
 }

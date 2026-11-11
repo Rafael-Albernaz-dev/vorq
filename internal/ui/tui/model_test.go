@@ -27,9 +27,9 @@ func (s *observedService) ToggleStage(ctx context.Context, dir, path string) err
 	s.stageCalls++
 	return s.Service.ToggleStage(ctx, dir, path)
 }
-func (s *observedService) CreateReviewedCommit(ctx context.Context, dir, message, diff string) (*domain.CommitResult, error) {
+func (s *observedService) CreateReviewedCommit(ctx context.Context, dir, message, diff string, allow bool) (*domain.CommitResult, error) {
 	s.commitCalls++
-	return s.Service.CreateReviewedCommit(ctx, dir, message, diff)
+	return s.Service.CreateReviewedCommit(ctx, dir, message, diff, allow)
 }
 func (s *observedService) PushChanges(ctx context.Context, dir string, opts domain.PushOptions) (*domain.PushResult, error) {
 	s.pushCalls++
@@ -551,7 +551,7 @@ func TestModel_ConflictGroupComesFromNativeGit(t *testing.T) {
 	if err := core.StageFiles(ctx, dir, []string{"file.go"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := core.Service.CreateCommit(ctx, dir, "chore: base"); err != nil {
+	if _, err := core.Service.CreateCommit(ctx, dir, "chore: base", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.Exec(ctx, dir, "checkout", "-b", "side"); err != nil {

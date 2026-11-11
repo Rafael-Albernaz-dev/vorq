@@ -73,7 +73,7 @@ func TestApp_StageFiles_And_Commit(t *testing.T) {
 	if err != nil || proposal.Message() != "feat(git): add ação [literal].go" {
 		t.Fatalf("proposal %+v: %v", proposal, err)
 	}
-	result, err := application.CreateCommit(ctx, nested, proposal.Message())
+	result, err := application.CreateCommit(ctx, nested, proposal.Message(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,14 +93,14 @@ func TestApp_StageFiles_And_Commit(t *testing.T) {
 func TestApp_CommitValidation(t *testing.T) {
 	application, runner, dir := setupCommitApp(t)
 	ctx := context.Background()
-	if _, err := application.CreateCommit(ctx, dir, "feat: empty"); err == nil {
+	if _, err := application.CreateCommit(ctx, dir, "feat: empty", false); err == nil {
 		t.Fatal("accepted empty index")
 	}
 	writeCommitFile(t, dir, "file.txt", "data")
 	if err := application.StageFiles(ctx, dir, []string{"file.txt"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateCommit(ctx, dir, " \n\t"); err == nil {
+	if _, err := application.CreateCommit(ctx, dir, " \n\t", false); err == nil {
 		t.Fatal("accepted empty message")
 	}
 	if _, err := application.ProposeCommit(ctx, dir, "invalid"); err == nil {
@@ -136,7 +136,7 @@ func TestApp_Commit_CurrentLinkedWorktree(t *testing.T) {
 	if err := application.StageFiles(ctx, nested, []string{"nested/selected.txt"}); err != nil {
 		t.Fatal(err)
 	}
-	result, err := application.CreateCommit(ctx, nested, "feat: linked worktree")
+	result, err := application.CreateCommit(ctx, nested, "feat: linked worktree", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestApp_Commit_BlocksConflicts(t *testing.T) {
 	if err := application.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateCommit(ctx, dir, "chore: base"); err != nil {
+	if _, err := application.CreateCommit(ctx, dir, "chore: base", false); err != nil {
 		t.Fatal(err)
 	}
 	runCmd(t, dir, "git", "checkout", "-b", "side")
@@ -161,7 +161,7 @@ func TestApp_Commit_BlocksConflicts(t *testing.T) {
 	if err := application.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateCommit(ctx, dir, "fix: side"); err != nil {
+	if _, err := application.CreateCommit(ctx, dir, "fix: side", false); err != nil {
 		t.Fatal(err)
 	}
 	runCmd(t, dir, "git", "checkout", "main")
@@ -169,7 +169,7 @@ func TestApp_Commit_BlocksConflicts(t *testing.T) {
 	if err := application.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateCommit(ctx, dir, "fix: main"); err != nil {
+	if _, err := application.CreateCommit(ctx, dir, "fix: main", false); err != nil {
 		t.Fatal(err)
 	}
 	before, err := runner.RevParseHead(ctx, dir)
@@ -182,7 +182,7 @@ func TestApp_Commit_BlocksConflicts(t *testing.T) {
 	if _, err := application.ProposeCommit(ctx, dir, "fix"); err == nil || !strings.Contains(err.Error(), "resolve merge conflicts") {
 		t.Fatalf("proposal accepted conflict: %v", err)
 	}
-	if _, err := application.CreateCommit(ctx, dir, "fix: conflict"); err == nil {
+	if _, err := application.CreateCommit(ctx, dir, "fix: conflict", false); err == nil {
 		t.Fatal("commit accepted conflict")
 	}
 	after, err := runner.RevParseHead(ctx, dir)
@@ -193,7 +193,7 @@ func TestApp_Commit_BlocksConflicts(t *testing.T) {
 	if err := application.StageFiles(ctx, dir, []string{"file.txt"}); err != nil {
 		t.Fatal(err)
 	}
-	result, err := application.CreateCommit(ctx, dir, "fix: resolve merge")
+	result, err := application.CreateCommit(ctx, dir, "fix: resolve merge", false)
 	if err != nil || !reflect.DeepEqual(result.FilesCommitted, []string{"file.txt"}) {
 		t.Fatalf("merge metadata %+v: %v", result, err)
 	}
@@ -214,7 +214,7 @@ func TestApp_PreviewCommit_Passive(t *testing.T) {
 				t.Fatal(err)
 			}
 			if initialCommit {
-				if _, err := application.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+				if _, err := application.CreateCommit(ctx, dir, "chore: initial", false); err != nil {
 					t.Fatal(err)
 				}
 				writeCommitFile(t, dir, "docs/ação.md", "changed\n")
@@ -261,7 +261,7 @@ func TestApp_PreviewCommit_StagedRevertedInWorktree(t *testing.T) {
 	if err := application.StageFiles(ctx, dir, []string{"."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+	if _, err := application.CreateCommit(ctx, dir, "chore: initial", false); err != nil {
 		t.Fatal(err)
 	}
 	writeCommitFile(t, dir, "file.txt", "staged\n")
@@ -288,7 +288,7 @@ func TestApp_PreviewCommit_DeletedThenRecreated(t *testing.T) {
 			if err := application.StageFiles(ctx, dir, []string{"."}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := application.CreateCommit(ctx, dir, "chore: initial"); err != nil {
+			if _, err := application.CreateCommit(ctx, dir, "chore: initial", false); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.Remove(filepath.Join(dir, "file.txt")); err != nil {
@@ -332,7 +332,7 @@ func TestApp_Commit_HookMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(hooks, "commit-msg"), []byte("#!/bin/sh\nprintf 'fix: hook edited message\\n' > \"$1\"\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	result, err := application.CreateCommit(ctx, dir, "feat: before hook")
+	result, err := application.CreateCommit(ctx, dir, "feat: before hook", false)
 	if err != nil || result.Subject != "fix: hook edited message" {
 		t.Fatalf("result %+v: %v", result, err)
 	}

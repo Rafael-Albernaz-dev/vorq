@@ -150,6 +150,10 @@ type CommitResult struct {
 	ShortHash      string   `json:"short_hash"`
 	Subject        string   `json:"subject"`
 	FilesCommitted []string `json:"files_committed"`
+	// Guardrails (VORQ-018): warnings shown and blocking findings the user
+	// explicitly overrode for this commit.
+	Warnings   []GuardFinding `json:"warnings,omitempty"`
+	Overridden []GuardFinding `json:"overridden,omitempty"`
 }
 
 // GitEntry and CommitInfo carry parsed repository metadata across the adapter
@@ -195,16 +199,22 @@ type PushTarget struct {
 	Behind        int    `json:"behind"`
 	HeadHash      string `json:"head_hash"`
 	DestinationID string `json:"destination_id"`
+	// Guard lists findings in commits not yet on any remote (VORQ-018).
+	Guard *GuardReport `json:"guard,omitempty"`
 }
 
 // PushOptions must carry the target actually reviewed by the caller.
 type PushOptions struct {
 	Target PushTarget `json:"target"`
+	// AllowFindings is the explicit, typed override of blocking findings for
+	// this push only (VORQ-018).
+	AllowFindings bool `json:"allow_findings,omitempty"`
 }
 
 type PushResult struct {
-	Target PushTarget `json:"target"`
-	Output string     `json:"output"`
+	Target     PushTarget     `json:"target"`
+	Output     string         `json:"output"`
+	Overridden []GuardFinding `json:"overridden,omitempty"`
 }
 
 func (f FileStatus) IsStaged() bool {

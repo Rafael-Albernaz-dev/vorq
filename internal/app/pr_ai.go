@@ -54,6 +54,19 @@ func (a *App) DraftPullRequestAI(ctx context.Context, dir, base, provider, model
 	if err != nil {
 		return nil, err
 	}
+	// VORQ-018: a file diff with a possible secret is replaced by a notice.
+	scanner, err := guardScanner(proj.RootPath)
+	if err != nil {
+		return nil, err
+	}
+	var withheld []string
+	for i := range changes.Files {
+		f := &changes.Files[i]
+		if !f.Omitted && withheldFromAI(scanner, f.Path, f.Diff) || f.Omitted && scanner.PathFinding(f.Path) != nil {
+			f.Diff, f.Omitted = "[diff omitted by vorq: possible secret, not sent]", true
+			withheld = append(withheld, f.Path)
+		}
+	}
 	payload, err := json.Marshal(map[string]any{
 		"head": draft.Head, "base": draft.Base, "base_ref": changes.BaseRef,
 		"context_documents": docs, "commits": changes.Commits, "files": changes.Files,
@@ -83,7 +96,7 @@ func (a *App) DraftPullRequestAI(ctx context.Context, dir, base, provider, model
 	if oid, err := a.gitRunner.RevParseHead(ctx, proj.RootPath); err != nil || oid != draft.HeadOID {
 		return nil, fmt.Errorf("HEAD changed during the analysis; generate the PR again")
 	}
-	draft.Title, draft.Body = title, body
+	draft.Title, draft.Body, draft.Withheld = title, body, withheld
 	return draft, nil
 }
 

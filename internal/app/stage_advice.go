@@ -61,6 +61,10 @@ func (a *App) contextDocuments(ctx context.Context, root string) ([]domain.Conte
 		return nil, err
 	}
 	defer fs.Close()
+	scanner, err := guardScanner(root)
+	if err != nil {
+		return nil, err
+	}
 	docs := []domain.ContextDocument{}
 	total := 0
 	for _, p := range tracked {
@@ -92,6 +96,9 @@ func (a *App) contextDocuments(ctx context.Context, root string) ([]domain.Conte
 			data = data[:len(data)-1]
 		}
 		doc.Content = string(data)
+		if withheldFromAI(scanner, p, doc.Content) {
+			continue // VORQ-018: a context document with a possible secret is not sent
+		}
 		if doc.Truncated {
 			doc.Content += fmt.Sprintf("\n[truncated by vorq: document larger than %d bytes]", budget)
 		}
@@ -225,8 +232,17 @@ func (a *App) ApplyStageAdvice(ctx context.Context, dir string, advice *domain.S
 	if err = r.ValidateSnapshot(ctx, advice.Snapshot, advice.Snapshot.Head, advice.Snapshot.Index); err != nil {
 		return fmt.Errorf("changes since the analysis; run it again (nothing applied): %w", err)
 	}
+	excluded := map[string]bool{}
+	for _, f := range advice.Snapshot.Files {
+		if f.Excluded != "" {
+			excluded[f.Path] = true
+		}
+	}
 	var stage, unstage []string
 	for _, c := range advice.Changes {
+		if c.Action == "stage" && excluded[c.Path] {
+			return fmt.Errorf("%q was excluded from the analysis; it is never staged by the advice", c.Path)
+		}
 		paths := []string{"./" + c.Path}
 		if c.OldPath != "" && c.OldPath != c.Path {
 			paths = append(paths, "./"+c.OldPath)

@@ -195,9 +195,9 @@ type partialCommitService struct {
 	calls       int
 }
 
-func (s *partialCommitService) CreateReviewedCommit(ctx context.Context, dir, message, diff string) (*domain.CommitResult, error) {
+func (s *partialCommitService) CreateReviewedCommit(ctx context.Context, dir, message, diff string, allow bool) (*domain.CommitResult, error) {
 	s.calls++
-	result, err := s.Service.CreateReviewedCommit(ctx, dir, message, diff)
+	result, err := s.Service.CreateReviewedCommit(ctx, dir, message, diff, allow)
 	if err != nil {
 		return result, err
 	}

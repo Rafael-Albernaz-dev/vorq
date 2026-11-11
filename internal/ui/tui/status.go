@@ -390,6 +390,9 @@ func (m *Model) modalView() string {
 		title = "REVISAR SUGESTÃO · " + m.aiProvider
 		if m.aiProposal != nil {
 			body = safeText(m.aiProposal.Proposal.Message())
+			if len(m.aiProposal.Withheld) > 0 {
+				body += "\n\nNão enviado à IA (possível segredo): " + strings.Join(m.aiProposal.Withheld, ", ")
+			}
 		}
 		body += "\n\nUsar preenche o editor. Commit abre a revisão local antes de confirmar.\nAmbos substituem resumo e descrição do rascunho."
 		help = "Enter usar · v revisar commit · o opções · Esc voltar"
@@ -452,6 +455,7 @@ func (m *Model) modalView() string {
 		} else {
 			body = fmt.Sprintf("%d arquivo(s) no stage\n\n%s\n\nO commit permanece local. Nenhum push automático.", m.commitCount, safeText(m.reviewMessage))
 			body += "\n\nArquivos preparados:\n" + strings.Join(m.reviewPaths, "\n")
+			body += guardSummary(m.reviewGuard)
 		}
 		help = "Enter confirmar · e editar · Esc cancelar sem unstage"
 		buttons = "[Confirmar]  [Editar]  [Voltar]"
@@ -500,9 +504,18 @@ func (m *Model) modalView() string {
 			if t.Behind > 0 {
 				body += "\nDivergências serão recusadas. Nenhum force será aplicado."
 			}
+			if t.Guard != nil {
+				body += fmt.Sprintf("\n\n%d commit(s) não publicados avaliados.", t.Guard.Commits)
+				body += guardSummary(t.Guard)
+			}
 		}
 		help = "Enter confirmar push · Esc cancelar"
 		buttons = "[Confirmar]  [Voltar]"
+	case modalGuard:
+		title = "SEGURANÇA · CONFIRMAR OVERRIDE"
+		body = m.guardBody()
+		help = "Digite " + domain.GuardOverrideWord + " · Enter confirmar · Esc voltar"
+		buttons = "[Confirmar] [Voltar]"
 	case modalWorktrees:
 		title = "WORKTREES · TROCAR WORKSPACE"
 		if len(m.worktrees) == 0 {

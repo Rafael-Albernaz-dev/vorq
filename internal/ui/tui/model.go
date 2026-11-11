@@ -221,6 +221,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.reviewDiff = msg.changes.StagedDiff
+		m.reviewGuard, m.guardOverride = msg.guard, false
 		m.reviewMessage = m.draftMessage()
 		m.commitCount = msg.changes.Summary().Staged
 		m.commitPhase = "review"
@@ -244,6 +245,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.pushTarget = msg.target
+		m.guardOverride = false
 	case worktreesMsg:
 		if msg.id != m.dialogID {
 			return m, nil

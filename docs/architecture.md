@@ -57,6 +57,7 @@ vorq/
 │   ├── git/               # Native Git execution wrapper
 │   ├── files/             # File synchronization, validation, and safety inspection
 │   ├── suggest/           # Local commit rules and the subscription AI CLI adapter (Codex, Gemini/Antigravity, Claude Code)
+│   ├── secrets/           # Local guardrail rules: secrets, conflict markers, large files, debug code, case collisions
 │   ├── ui/
 │   │   ├── cli/           # CLI commands, argument parsing, tabular renderers
 │   │   └── tui/           # Bubble Tea terminal interface
@@ -81,6 +82,12 @@ Embedded Tree-sitter grammars supply lexical categories and local structural rol
 Worktree discovery uses at most four concurrent workers and joins them on cancellation. Failed status, ignored-file or required metadata reads propagate as errors. Safety audits refresh the status immediately before removal. `--force` authorizes known dirty data; it cannot bypass an incomplete audit or active/main-worktree protections. Git alone removes worktrees: any residual path, including a replaced directory or dangling symlink, is preserved and reported as an error.
 
 Native stdout is capped at 16 MiB and stderr at 64 KiB; truncated stdout is never parsed as complete state. File/diff previews retain their separate 256 KiB cap. Porcelain parsers reject incomplete status records. Missing Git produces a CLI error while help/version remain available.
+
+## Commit, push and AI guardrails
+
+`internal/secrets` is a pure-Go rule engine (no network, no external tools): provider token formats, private keys, credential URLs, hard-coded password/secret/token assignments filtered by placeholders and entropy, sensitive file names, conflict markers, debug statements, large files and case collisions. It parses Git patches (quoted paths, renames, binary sections, deletions) and checks only added lines and files that exist after the change. Findings are masked at creation; detected values are never stored or returned. Exceptions come from an inline `vorq:allow-secret` marker and the versioned `.vorqsecrets-allow` (path globs with optional rule IDs); a malformed exceptions file fails closed.
+
+`internal/app` applies it in one place per operation, so CLI and Studio cannot diverge: `CreateCommit` (and therefore reviewed commits) checks the staged patch, staged blob sizes and index case collisions and returns `*domain.GuardBlockedError` for blocking findings unless the caller passes the user's typed override; `GetPushTarget` checks every commit not reachable from any remote-tracking ref (`rev-list HEAD --not --remotes`, one first-parent patch per commit, at most 500, beyond which an unverified finding blocks) and `PushChanges` re-applies the decision on the same reviewed HEAD; plan execution re-checks the reviewed content before the first commit. AI payloads drop whole files with a possible secret — every diff line counts, including removed and context lines — for message suggestions, snapshot analyses (marked excluded and emptied, so never staged by advice, planned or saved to disk), context documents and PR drafts. The Git adapter only adds read primitives (`StagedBlobSizes`, `UnpublishedCommits`, `CommitPatch`).
 
 ## Studio state and memory
 

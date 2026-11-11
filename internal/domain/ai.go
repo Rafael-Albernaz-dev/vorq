@@ -16,4 +16,5 @@ type AIModel struct {
 type AIProposal struct {
 	Proposal CommitProposal
 	Diff     string
+	Withheld []string // staged files not sent: possible secret (VORQ-018)
 }
