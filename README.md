@@ -147,6 +147,7 @@ Globs without `/` match a file name at any depth; `**` matches any number of fol
 
 - **Push** (`p` or click ↑) shows `Local → Remote/branch` and ahead count before sending; without upstream it proposes `origin` (or the only remote) and sets the upstream after confirmation. Never forced.
 - **Update** (click ↓, or `vorq pull`) requires an upstream and a clean workspace, fetches only the reviewed branch into a private temporary ref, re-checks HEAD/source/status, then applies a **fast-forward only** merge. No merge commits, rebase, stash or overwriting of ignored files.
+- **Bring main** (`[⇣ Trazer main]` beside `[↻ Atualizar]`, Git panel → *Trazer main*, or `vorq sync`) merges the remote default branch (`origin/HEAD`, else `main`/`master`) into the current branch. The review shows how many commits are known locally; confirming fetches only that branch into a private ref, re-checks HEAD/source/status and runs a native `git merge` (hooks and signing apply). It requires a clean workspace and never rebases, stashes or forces. Conflicts stop the merge with the files listed: resolve, stage and commit in the Studio, or abort (`a` in the dialog, `vorq sync --abort`) to restore the previous state. On the default branch itself the button opens the regular fast-forward update. Below 80 columns the button is hidden; use the Git panel.
 - **Branches** (`b`) — create and enter a branch (stage and files preserved); another base requires a clean workspace. **Git → Trocar branch** switches to an existing local branch after review (clean workspace required; branches checked out in other worktrees are opened from the Worktrees tab).
 - **History** (`H`) — local commit graph with pages (`n` / `[`), search and ref filter (`/`) and patch previews (256 KiB cap, marked). No automatic fetch.
 - **Credentials and signing.** The Studio never lets Git, SSH or GPG prompt over its screen. If a push, update, PR check, signed commit or plan needs a password, token, passphrase or PIN, it stops before publishing or committing and offers **[Terminal]** (`t`): the Studio is suspended, the same reviewed operation runs in your normal terminal where the prompt appears, and the Studio returns with the result. Cached credentials (credential helper, ssh-agent, gpg-agent) keep working without prompts. CLI commands prompt normally.
@@ -222,6 +223,8 @@ vorq suggest --provider claude    # AI message from the staged diff (or --provid
 
 vorq push [--yes] [--allow-secrets]  # reviewed push; unpublished commits are checked first
 vorq pull [--yes]                 # fetch + fast-forward only
+vorq sync [--yes]                 # fetch + merge the remote default branch (main) into the current branch
+vorq sync --abort                 # abort a merge stopped by conflicts
 vorq branch feat/x [--stay --base main]
 vorq switch <branch> [--yes]
 vorq tree [--limit 100 --skip 0 --ref main --search 'fix:' --commit <hash>]
@@ -299,11 +302,12 @@ Delivered:
 
 - **Foundation & discovery** — core, porcelain parsers, worktree inspection.
 - **Worktree lifecycle** — `spawn`, safe `rm`, `prune`.
-- **Guided commits & safe discard**, **explicit push**, **fast-forward update**.
+- **Guided commits & safe discard**, **explicit push**, **fast-forward update**, **merge from the default branch**.
 - **Workspace Studio** — three-pane TUI, highlighting, mouse, themes, full-screen viewer, explicit refresh.
 - **Integrated Git flow** — repository link, branches, history graph, GitHub PRs (create, edit, mark ready).
 - **AI by subscription** — Codex, Gemini (Antigravity) and Claude Code for commit messages, reviews, next-commit staging advice, commit plans and PR descriptions.
 - **Hardening** — credential/GPG prompts kept out of the Studio, upstream-gone tolerance, lint gates in CI, explicit ports.
+- **Security checks** — secrets and conflict markers block commits and pushes (typed override), files with possible secrets never reach AI providers.
 
 Not planned for now: merging PRs from vorq, rebase/cherry-pick, branch deletion, hunk-level staging, local LLMs.
 

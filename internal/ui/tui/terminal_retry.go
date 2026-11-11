@@ -41,6 +41,10 @@ func (m *Model) retryBuilder(kind string) func() operation {
 		if m.pullTarget != nil {
 			return m.pullOp
 		}
+	case "sync":
+		if m.syncTarget != nil && !m.syncTarget.MergeInProgress {
+			return m.syncOp
+		}
 	case "commit":
 		if m.reviewMessage != "" {
 			return m.commitOp

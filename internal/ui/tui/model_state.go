@@ -72,6 +72,7 @@ type dialogState struct {
 	guardInput                        string
 	guardOverride                     bool // CONFIRMAR typed for the reviewed operation
 	pullTarget                        *domain.PullTarget
+	syncTarget                        *domain.SyncTarget
 	worktrees                         []*domain.Workspace
 	worktreeIndex                     int
 }

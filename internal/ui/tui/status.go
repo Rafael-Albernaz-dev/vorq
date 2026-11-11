@@ -299,6 +299,9 @@ func (m *Model) modalView() string {
 		if m.resultKind == "push" {
 			title = "PUSH CONCLUÍDO"
 		}
+		if m.resultKind == "sync" {
+			title = "TRAZER BRANCH BASE"
+		}
 		body = m.resultBody
 		help = "Resultado confirmado pelo Git nativo · Enter ou Esc voltar"
 		buttons = "[Voltar]"
@@ -479,6 +482,8 @@ func (m *Model) modalView() string {
 		}
 		help = "Enter confirmar troca · Esc cancelar"
 		buttons = "[Confirmar] [Voltar]"
+	case modalSync:
+		title, body, help, buttons = m.syncModal()
 	case modalPull:
 		title = "ATUALIZAR BRANCH · FAST-FORWARD"
 		body = "Inspecionando origem e estado local…"

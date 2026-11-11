@@ -225,6 +225,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reviewMessage = m.draftMessage()
 		m.commitCount = msg.changes.Summary().Staged
 		m.commitPhase = "review"
+	case syncTargetMsg:
+		return m, m.receiveSyncTarget(msg)
 	case pullTargetMsg:
 		if msg.id != m.dialogID {
 			return m, nil
@@ -274,7 +276,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.modal = ""
 			m.notice = msg.notice
-			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull") {
+			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull" || msg.kind == "sync") {
 				m.modal = modalResult
 				m.resultKind = msg.kind
 				m.resultBody = msg.notice

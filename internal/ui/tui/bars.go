@@ -23,7 +23,12 @@ func (m *Model) contextRight() string {
 	if m.stale {
 		right += " · DESATUALIZADO"
 	}
-	return right + barSeparator() + accentStyle.Bold(true).Render(refreshButton)
+	right += barSeparator()
+	// Below 80 columns only Atualizar fits; Trazer main stays in the Git panel.
+	if m.width >= 80 {
+		right += accentStyle.Bold(true).Render(syncButton) + "  "
+	}
+	return right + accentStyle.Bold(true).Render(refreshButton)
 }
 
 func (m *Model) contextBar(branch string, ahead, behind int) string {

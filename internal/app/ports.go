@@ -18,6 +18,7 @@ type Repository interface {
 	ExplorerRepository
 	PushRepository
 	PullRepository
+	SyncRepository
 	BranchSwitchRepository
 	WorkflowRepository
 	AutomationRepository

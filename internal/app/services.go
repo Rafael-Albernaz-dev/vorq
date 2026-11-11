@@ -57,6 +57,7 @@ type Service interface {
 	AISuggestionService
 	BranchSwitchService
 	PullService
+	SyncService
 	WorkflowService
 	ProjectService
 	WorkspaceReader
@@ -77,6 +78,7 @@ type StudioService interface {
 	AISuggestionService
 	BranchSwitchService
 	PullService
+	SyncService
 	WorkflowService
 	StageService
 	PushService

@@ -100,3 +100,18 @@ type BranchChanges struct {
 	Commits   []BranchCommit   `json:"commits"`
 	Files     []BranchFileDiff `json:"files"`
 }
+
+// SyncTarget is the reviewed "bring the base branch" update (VORQ-019).
+type SyncTarget struct {
+	WorkspacePath, Branch, Remote, Base, HeadHash, SourceID string
+	Behind                                                  int
+	OnBase, MergeInProgress                                 bool
+	Conflicts                                               []string
+}
+type SyncResult struct {
+	Target            SyncTarget
+	Incoming          int
+	UpToDate, Stopped bool
+	Conflicts         []string
+	Output            string
+}

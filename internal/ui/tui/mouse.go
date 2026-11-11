@@ -356,7 +356,7 @@ func (m *Model) modalMouse(msg tea.MouseMsg) tea.Cmd {
 	line := box[y]
 	// Only the renderer's dedicated three-row outlined footer owns actions.
 	// Message text and paths remain data even when they contain button labels.
-	for label, key := range map[string]string{"[Executar]": "enter", "[OK]": "enter", "[Diff]": "d", "[Salvar]": "ctrl+s", "[Organizar]": "o", "[Descartar]": "enter", "[Preservar]": "u", "[Confirmar]": "enter", "[Usar]": "enter", "[Commit]": "v", "[Mais]": "o", "[Revisar]": "enter", "[Abrir]": "enter", "[Editar]": "e", "[Opções]": "o", "[Voltar]": "esc", "[Fechar]": "esc", "[Cancelar]": "esc", terminalRetryButton: "t", applyButton: "a"} {
+	for label, key := range map[string]string{"[Executar]": "enter", "[OK]": "enter", "[Diff]": "d", "[Salvar]": "ctrl+s", "[Organizar]": "o", "[Descartar]": "enter", "[Preservar]": "u", "[Confirmar]": "enter", "[Abortar merge]": "a", "[Usar]": "enter", "[Commit]": "v", "[Mais]": "o", "[Revisar]": "enter", "[Abrir]": "enter", "[Editar]": "e", "[Opções]": "o", "[Voltar]": "esc", "[Fechar]": "esc", "[Cancelar]": "esc", terminalRetryButton: "t", applyButton: "a"} {
 		if mouseOutlinedButtonHit(box, label, x, y) {
 			if key == "enter" {
 				return m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})

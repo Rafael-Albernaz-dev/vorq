@@ -154,6 +154,8 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 		if s == "enter" {
 			return m.pull()
 		}
+	case modalSync:
+		return m.syncKey(s)
 	case modalPush:
 		if s == "enter" {
 			return m.push()
