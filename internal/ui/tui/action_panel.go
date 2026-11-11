@@ -51,7 +51,7 @@ func (m *Model) panelActions() []panelAction {
 	case "ai":
 		return []panelAction{{"Provedor e modelo", "Escolher Codex, Gemini ou Claude Code.", "ai-configure"}, {"Sugerir mensagem", "Analisar somente o stage.", "ai-suggest"}, {"Preparar próximo commit", "IA indica o que pôr no stage.", "ai-stage"}, {"Revisar diff", "Revisão das mudanças elegíveis.", "ai-review"}, {"Organizar commits", "Propor grupos e mensagens.", "ai-plan"}, {"Revisar plano", "Editar, aprovar ou retomar.", "ai-saved"}}
 	case "git":
-		return []panelAction{{"Nova branch", "Criar e entrar em uma branch.", "b"}, {"Trocar branch", "Escolher uma branch local existente.", "switch-branch"}, {"Apagar branch", "Escolher branch; apaga local e remoto.", "switch-branch"}, {"Histórico de commits", "Ver branches, merges e diffs.", "H"}, {"Revisar push ↑", "Conferir destino antes de publicar.", "p"}, {"Atualizar branch ↓", "Buscar e aplicar somente fast-forward.", "pull"}, {"Trazer main ⇣", "Merge da branch default do remoto.", "sync"}}
+		return []panelAction{{"Nova branch", "Criar e entrar em uma branch.", "b"}, {"Trocar branch", "Escolher uma branch local existente.", "switch-branch"}, {"Apagar branch", "Escolher branch; apaga local e remoto.", "switch-branch"}, {"Histórico de commits", "Ver branches, merges e diffs.", "H"}, {"Revisar push ↑", "Conferir destino antes de publicar.", "p"}, {"Atualizar branch ↓", "Buscar e aplicar somente fast-forward.", "pull"}, {"Trazer main ⇣", "Merge da branch default do remoto.", "sync"}, {"Rebase sobre main", "Reaplicar commits não publicados.", "rebase"}, {"Operação em andamento", "Continuar ou abortar merge/rebase.", "operation"}}
 	case "prs":
 		return []panelAction{{"Listar PRs", "Consultar PRs, checks e revisões.", "P"}, {"Criar PR", "Preparar título, descrição e revisão.", "new-pr"}}
 	case "worktrees":
@@ -121,6 +121,10 @@ func (m *Model) runPanelAction(index int) tea.Cmd {
 		return m.inspectPull()
 	case "sync":
 		return m.inspectSync()
+	case "rebase":
+		return m.inspectRebase()
+	case "operation":
+		return m.inspectOperation()
 	default:
 		return m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(actions[index].key)})
 	}

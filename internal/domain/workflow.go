@@ -136,3 +136,28 @@ type PRMergeResult struct {
 	Plan   PRMergePlan
 	Method string
 }
+
+// OperationState is a stopped merge, cherry-pick or rebase (VORQ-020).
+type OperationState struct {
+	Kind      string // "merge", "cherry-pick", "rebase", "revert" or ""
+	Conflicts []string
+}
+
+// OperationResult is the outcome of cherry-pick, rebase or continue: either
+// done, or stopped for resolution (conflicts, or a hook/empty commit).
+type OperationResult struct {
+	Kind, Output string
+	Stopped      bool
+	Conflicts    []string
+}
+
+// CherryPickPlan pins the commit and the branch it is applied to.
+type CherryPickPlan struct {
+	WorkspacePath, Branch, HeadHash, Commit, Subject string
+}
+
+// RebasePlan replays only unpublished commits onto the remote default branch.
+type RebasePlan struct {
+	WorkspacePath, Branch, HeadHash, Remote, Base, SourceID string
+	Commits, Behind                                         int
+}

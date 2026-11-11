@@ -35,6 +35,11 @@ func (a *App) GetSyncTarget(ctx context.Context, dir string) (*domain.SyncTarget
 		return nil, e
 	}
 	root := p.RootPath
+	if kind, e := r.OperationInProgress(ctx, root); e != nil {
+		return nil, e
+	} else if kind != "" && kind != "merge" {
+		return nil, fmt.Errorf("a %s is in progress; continue or abort it first (Git → Operação em andamento, or vorq continue / vorq abort)", kind)
+	}
 	branch, e := r.CurrentBranch(ctx, root)
 	if e != nil || branch == "" {
 		return nil, fmt.Errorf("updating from the base requires an attached local branch (detached HEAD is not accepted)")

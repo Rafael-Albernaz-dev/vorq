@@ -305,6 +305,9 @@ func (m *Model) modalView() string {
 		if m.resultKind == "branch-delete" {
 			title = "BRANCH APAGADA"
 		}
+		if m.resultKind == "operation" {
+			title = "OPERAÇÃO GIT"
+		}
 		body = m.resultBody
 		help = "Resultado confirmado pelo Git nativo · Enter ou Esc voltar"
 		buttons = "[Voltar]"
@@ -496,6 +499,8 @@ func (m *Model) modalView() string {
 		title, body, help, buttons = m.branchDeleteModal()
 	case modalPRMerge:
 		title, body, help, buttons = m.prMergeModal()
+	case modalCherryPick, modalRebase, modalOperation:
+		title, body, help, buttons = m.operationModal()
 	case modalPull:
 		title = "ATUALIZAR BRANCH · FAST-FORWARD"
 		body = "Inspecionando origem e estado local…"

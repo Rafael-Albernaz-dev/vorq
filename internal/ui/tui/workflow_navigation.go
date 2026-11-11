@@ -86,6 +86,10 @@ func (m *Model) workflowKey(k tea.KeyMsg) tea.Cmd {
 		if m.screen == "prs" {
 			return m.openPRReady()
 		}
+	case "C":
+		if m.screen == "history" {
+			return m.openCherryPick()
+		}
 	case "M":
 		if m.screen == "prs" {
 			return m.openPRMerge()
@@ -101,7 +105,7 @@ func (m *Model) workflowView() string {
 	rows := []string{}
 	selected, offset := m.historyIndex, m.historyOffset
 	title := "HISTÓRICO · grafo local"
-	help := "↑/↓ commits · PgUp/PgDn detalhes · n próxima · [ anterior · / filtros · P PRs · v PRs do commit · r atualizar · Esc voltar"
+	help := "↑/↓ commits · PgUp/PgDn detalhes · n próxima · [ anterior · / filtros · P PRs · v PRs do commit · C cherry-pick · r atualizar · Esc voltar"
 	if m.screen == "history" && m.history != nil {
 		for _, l := range m.history.Lines {
 			line := l.Graph
@@ -200,7 +204,7 @@ func (m *Model) workflowMouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Y == m.height-1 {
 		line := strings.Split(m.workflowView(), "\n")
 		footer := line[len(line)-1]
-		for label, key := range map[string]string{"P PRs": "P", "v PRs do commit": "v", "c criar": "c", "e editar": "e", "y pronto": "y", "M mergear": "M", "n próxima": "n", "n ampliar limite": "n", "[ anterior": "[", "/ filtros": "/", "r atualizar": "r"} {
+		for label, key := range map[string]string{"P PRs": "P", "v PRs do commit": "v", "C cherry-pick": "C", "c criar": "c", "e editar": "e", "y pronto": "y", "M mergear": "M", "n próxima": "n", "n ampliar limite": "n", "[ anterior": "[", "/ filtros": "/", "r atualizar": "r"} {
 			if mouseLabelHit(footer, label, msg.X) {
 				return m.workflowKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 			}

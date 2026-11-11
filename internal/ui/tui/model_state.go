@@ -78,6 +78,9 @@ type dialogState struct {
 	prMergePlan                       *domain.PRMergePlan
 	prMergeMethod                     int
 	prMerged                          *domain.PRMergePlan // last PR merged here: cleanup offers
+	cherryPickPlan                    *domain.CherryPickPlan
+	rebasePlan                        *domain.RebasePlan
+	operationState                    *domain.OperationState
 	worktrees                         []*domain.Workspace
 	worktreeIndex                     int
 }

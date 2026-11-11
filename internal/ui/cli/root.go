@@ -131,6 +131,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newPushCmd(appCore))
 	rootCmd.AddCommand(newPullCmd(appCore))
 	rootCmd.AddCommand(newSyncCmd(appCore))
+	rootCmd.AddCommand(newCherryPickCmd(appCore), newRebaseCmd(appCore), newContinueCmd(appCore), newAbortCmd(appCore))
 	rootCmd.AddCommand(newSwitchCmd(appCore))
 	rootCmd.AddCommand(newSuggestCmd(appCore))
 	rootCmd.AddCommand(newAICmd(appCore), newPathCmd(appCore))

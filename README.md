@@ -148,6 +148,9 @@ Globs without `/` match a file name at any depth; `**` matches any number of fol
 - **Push** (`p` or click ↑) shows `Local → Remote/branch` and ahead count before sending; without upstream it proposes `origin` (or the only remote) and sets the upstream after confirmation. Never forced.
 - **Update** (click ↓, or `vorq pull`) requires an upstream and a clean workspace, fetches only the reviewed branch into a private temporary ref, re-checks HEAD/source/status, then applies a **fast-forward only** merge. No merge commits, rebase, stash or overwriting of ignored files.
 - **Bring main** (`[⇣ Trazer main]` beside `[↻ Atualizar]`, Git panel → *Trazer main*, or `vorq sync`) merges the remote default branch (`origin/HEAD`, else `main`/`master`) into the current branch. The review shows how many commits are known locally; confirming fetches only that branch into a private ref, re-checks HEAD/source/status and runs a native `git merge` (hooks and signing apply). It requires a clean workspace and never rebases, stashes or forces. Conflicts stop the merge with the files listed: resolve, stage and commit in the Studio, or abort (`a` in the dialog, `vorq sync --abort`) to restore the previous state. On the default branch itself the button opens the regular fast-forward update. Below 80 columns the button is hidden; use the Git panel.
+- **Rebase** (**Git → Rebase sobre main**, or `vorq rebase`) replays the current branch onto the remote default branch after fetching it into a private ref. Only **unpublished** commits can be rebased, so vorq never needs a force push; for a published branch use *Trazer main* (merge). Clean workspace required.
+- **Cherry-pick** (`C` on a commit in the history screen, or `vorq cherry-pick <commit>`) applies one commit onto the current branch with `-x` (origin recorded). Merge commits and commits already in the branch (same patch) are refused.
+- **Conflicts** in a merge, cherry-pick or rebase stop the operation with the files listed. Resolve, stage, then **Git → Operação em andamento** → `c` continue (no editor opens) or `a` abort to restore the previous state (CLI: `vorq continue`, `vorq abort`).
 - **Branches** (`b`) — create and enter a branch (stage and files preserved); another base requires a clean workspace. **Git → Trocar branch** switches to an existing local branch after review (clean workspace required; branches checked out in other worktrees are opened from the Worktrees tab).
 - **Delete a branch** (**Git → Apagar branch**, or `d` / `[Apagar]` in the branch list; `vorq branch -d <name>`) reviews the branch first: whether it is merged into the default branch, how many commits are on no remote, and its remote branch, which is deleted **together** (pinned with `--force-with-lease`, so it is refused if someone pushed new commits). The current branch, the default branch and branches checked out in a worktree are refused. A branch that is not merged needs the typed `CONFIRMAR` (CLI: `--allow-unmerged`, scripts `--allow-unmerged --yes`); the result shows the hash to recover it (`git branch <name> <hash>`).
 - **History** (`H`) — local commit graph with pages (`n` / `[`), search and ref filter (`/`) and patch previews (256 KiB cap, marked). No automatic fetch.
@@ -227,6 +230,10 @@ vorq push [--yes] [--allow-secrets]  # reviewed push; unpublished commits are ch
 vorq pull [--yes]                 # fetch + fast-forward only
 vorq sync [--yes]                 # fetch + merge the remote default branch (main) into the current branch
 vorq sync --abort                 # abort a merge stopped by conflicts
+vorq rebase [--yes]               # replay unpublished commits onto the remote default branch
+vorq cherry-pick <commit> [--yes] # apply one commit onto the current branch
+vorq continue                     # continue a merge/cherry-pick/rebase after resolving
+vorq abort [--yes]                # abort it and restore the previous state
 vorq branch feat/x [--stay --base main]
 vorq branch -d feat/x [--yes] [--allow-unmerged]  # delete local + remote branch after review
 vorq switch <branch> [--yes]
@@ -306,7 +313,7 @@ Delivered:
 
 - **Foundation & discovery** — core, porcelain parsers, worktree inspection.
 - **Worktree lifecycle** — `spawn`, safe `rm`, `prune`.
-- **Guided commits & safe discard**, **explicit push**, **fast-forward update**, **merge from the default branch**.
+- **Guided commits & safe discard**, **explicit push**, **fast-forward update**, **merge from the default branch**, **rebase of unpublished commits**, **cherry-pick**, with continue/abort on conflicts.
 - **Workspace Studio** — three-pane TUI, highlighting, mouse, themes, full-screen viewer, explicit refresh.
 - **Integrated Git flow** — repository link, branches (create, switch, delete), history graph, GitHub PRs (create, edit, mark ready, merge).
 - **AI by subscription** — Codex, Gemini (Antigravity) and Claude Code for commit messages, reviews, next-commit staging advice, commit plans and PR descriptions.
