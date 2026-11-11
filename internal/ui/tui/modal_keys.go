@@ -12,6 +12,9 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 	if m.modal == modalGuard {
 		return m.guardKey(key)
 	}
+	if m.modal == modalBranchDelete {
+		return m.branchDeleteKey(key)
+	}
 	if m.modal == modalPlanDiff && s == "esc" {
 		m.modal = modalPlan
 		return nil

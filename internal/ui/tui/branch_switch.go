@@ -88,6 +88,8 @@ func (m *Model) branchSelectorKey(key tea.KeyMsg) tea.Cmd {
 		m.branchIndex = min(max(0, len(m.localBranches)-1), m.branchIndex+m.modalBodyHeight())
 	case "enter":
 		return m.reviewBranchSwitch()
+	case "d":
+		return m.reviewBranchDelete()
 	}
 	return nil
 }
@@ -142,6 +144,9 @@ func (m *Model) branchSelectorMouse(msg tea.MouseMsg) tea.Cmd {
 	}
 	if mouseOutlinedButtonHit(box, "[Revisar]", x, y) {
 		return m.reviewBranchSwitch()
+	}
+	if mouseOutlinedButtonHit(box, "[Apagar]", x, y) {
+		return m.reviewBranchDelete()
 	}
 	_, owners := m.branchModalRows()
 	if y >= 4 && y < 4+len(owners) {

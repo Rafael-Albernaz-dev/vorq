@@ -23,9 +23,16 @@ func terminalText(s string) string {
 		return r
 	}, ansi.Strip(s))
 }
-func newBranchCmd(core app.WorkflowService) *cobra.Command {
+func newBranchCmd(core interface {
+	app.WorkflowService
+	app.BranchDeleteService
+}) *cobra.Command {
 	var o domain.BranchOptions
-	c := &cobra.Command{Use: "branch <name>", Short: "Create and enter a local branch without stashing or discarding files", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
+	var del, allowUnmerged, yes bool
+	c := &cobra.Command{Use: "branch <name>", Short: "Create and enter a local branch, or delete one with -d (local and remote)", Args: cobra.ExactArgs(1), RunE: func(c *cobra.Command, args []string) error {
+		if del {
+			return branchDelete(c, core, args[0], allowUnmerged, yes)
+		}
 		o.Name = args[0]
 		if e := core.CreateBranch(c.Context(), ".", o); e != nil {
 			return e
@@ -35,6 +42,9 @@ func newBranchCmd(core app.WorkflowService) *cobra.Command {
 	}}
 	c.Flags().StringVar(&o.Base, "base", "", "Base (default: current HEAD)")
 	c.Flags().BoolVar(&o.Stay, "stay", false, "Create without switching")
+	c.Flags().BoolVarP(&del, "delete", "d", false, "Delete the local branch and its remote branch after review")
+	c.Flags().BoolVar(&allowUnmerged, "allow-unmerged", false, "With -d: allow deleting unmerged commits (asks for CONFIRMAR)")
+	c.Flags().BoolVarP(&yes, "yes", "y", false, "With -d: skip interactive confirmation (unmerged still needs --allow-unmerged)")
 	return c
 }
 func newTreeCmd(core app.WorkflowService) *cobra.Command {

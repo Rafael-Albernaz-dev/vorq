@@ -19,6 +19,7 @@ type Repository interface {
 	PushRepository
 	PullRepository
 	SyncRepository
+	BranchDeleteRepository
 	BranchSwitchRepository
 	WorkflowRepository
 	AutomationRepository

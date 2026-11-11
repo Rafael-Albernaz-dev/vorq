@@ -302,6 +302,9 @@ func (m *Model) modalView() string {
 		if m.resultKind == "sync" {
 			title = "TRAZER BRANCH BASE"
 		}
+		if m.resultKind == "branch-delete" {
+			title = "BRANCH APAGADA"
+		}
 		body = m.resultBody
 		help = "Resultado confirmado pelo Git nativo · Enter ou Esc voltar"
 		buttons = "[Voltar]"
@@ -463,7 +466,7 @@ func (m *Model) modalView() string {
 		help = "Enter confirmar · e editar · Esc cancelar sem unstage"
 		buttons = "[Confirmar]  [Editar]  [Voltar]"
 	case modalBranches:
-		title = "TROCAR BRANCH · BRANCHES LOCAIS"
+		title = "BRANCHES LOCAIS · TROCAR OU APAGAR"
 		body = "Carregando branches…"
 		if m.busy == "" {
 			rows, _ := m.branchModalRows()
@@ -472,8 +475,8 @@ func (m *Model) modalView() string {
 				body = "Nenhuma branch local disponível."
 			}
 		}
-		help = "Clique ou ↑/↓ escolher · Enter revisar · Esc voltar"
-		buttons = "[Revisar] [Voltar]"
+		help = "Clique ou ↑/↓ escolher · Enter revisar troca · d apagar · Esc voltar"
+		buttons = "[Revisar] [Apagar] [Voltar]"
 	case modalSwitchBranch:
 		title = "REVISAR TROCA DE BRANCH"
 		body = "Verificando destino e estado local…"
@@ -484,6 +487,8 @@ func (m *Model) modalView() string {
 		buttons = "[Confirmar] [Voltar]"
 	case modalSync:
 		title, body, help, buttons = m.syncModal()
+	case modalBranchDelete:
+		title, body, help, buttons = m.branchDeleteModal()
 	case modalPull:
 		title = "ATUALIZAR BRANCH · FAST-FORWARD"
 		body = "Inspecionando origem e estado local…"

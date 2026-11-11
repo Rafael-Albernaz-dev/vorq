@@ -25,6 +25,7 @@ const (
 	modalPlanExecute  modalID = "plan-execute"
 	modalPull         modalID = "pull"
 	modalSync         modalID = "sync"
+	modalBranchDelete modalID = "branch-delete"
 	modalPush         modalID = "push"
 	modalResult       modalID = "result"
 	modalStageAdvice  modalID = "stage-advice"

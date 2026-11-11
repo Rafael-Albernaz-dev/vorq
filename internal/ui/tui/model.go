@@ -225,6 +225,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reviewMessage = m.draftMessage()
 		m.commitCount = msg.changes.Summary().Staged
 		m.commitPhase = "review"
+	case branchDeletePlanMsg:
+		m.receiveBranchDeletePlan(msg)
+		return m, nil
 	case syncTargetMsg:
 		return m, m.receiveSyncTarget(msg)
 	case pullTargetMsg:
@@ -276,7 +279,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.modal = ""
 			m.notice = msg.notice
-			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull" || msg.kind == "sync") {
+			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull" || msg.kind == "sync" || msg.kind == "branch-delete") {
 				m.modal = modalResult
 				m.resultKind = msg.kind
 				m.resultBody = msg.notice
