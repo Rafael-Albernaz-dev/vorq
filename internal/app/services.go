@@ -59,6 +59,7 @@ type Service interface {
 	PullService
 	SyncService
 	BranchDeleteService
+	PRMergeService
 	WorkflowService
 	ProjectService
 	WorkspaceReader
@@ -81,6 +82,7 @@ type StudioService interface {
 	PullService
 	SyncService
 	BranchDeleteService
+	PRMergeService
 	WorkflowService
 	StageService
 	PushService

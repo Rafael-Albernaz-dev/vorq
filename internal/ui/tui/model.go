@@ -225,6 +225,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reviewMessage = m.draftMessage()
 		m.commitCount = msg.changes.Summary().Staged
 		m.commitPhase = "review"
+	case prMergePlanMsg:
+		m.receivePRMergePlan(msg)
+		return m, nil
 	case branchDeletePlanMsg:
 		m.receiveBranchDeletePlan(msg)
 		return m, nil
@@ -279,7 +282,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.modal = ""
 			m.notice = msg.notice
-			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull" || msg.kind == "sync" || msg.kind == "branch-delete") {
+			if msg.err == nil && (msg.kind == "commit" || msg.kind == "push" || msg.kind == "pull" || msg.kind == "sync" || msg.kind == "branch-delete" || msg.kind == "pr-merge") {
 				m.modal = modalResult
 				m.resultKind = msg.kind
 				m.resultBody = msg.notice
@@ -303,7 +306,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commitField = "summary"
 			}
 		}
-		if msg.kind == "pr" && msg.err == nil && m.screen == "prs" {
+		if msg.kind == "pr-merge" && msg.err == nil && m.prMergePlan != nil {
+			merged := *m.prMergePlan
+			m.prMerged = &merged
+		}
+		if (msg.kind == "pr" || msg.kind == "pr-merge") && msg.err == nil && m.screen == "prs" {
 			return m, m.loadPRs()
 		}
 		return m, m.refresh()

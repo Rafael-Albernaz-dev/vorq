@@ -308,6 +308,11 @@ func (m *Model) modalView() string {
 		body = m.resultBody
 		help = "Resultado confirmado pelo Git nativo · Enter ou Esc voltar"
 		buttons = "[Voltar]"
+		if m.resultKind == "pr-merge" {
+			title = "PR MERGEADO"
+			help = "b voltar para a base e atualizar · d apagar a branch · Enter ou Esc voltar"
+			buttons = "[Ir para base] [Apagar branch] [Voltar]"
+		}
 	case modalAppearance:
 		title = "APARÊNCIA"
 		body = "Paletas da Mesa de Commit · tema salvo para a próxima sessão\n\n"
@@ -489,6 +494,8 @@ func (m *Model) modalView() string {
 		title, body, help, buttons = m.syncModal()
 	case modalBranchDelete:
 		title, body, help, buttons = m.branchDeleteModal()
+	case modalPRMerge:
+		title, body, help, buttons = m.prMergeModal()
 	case modalPull:
 		title = "ATUALIZAR BRANCH · FAST-FORWARD"
 		body = "Inspecionando origem e estado local…"

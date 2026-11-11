@@ -115,3 +115,24 @@ type SyncResult struct {
 	Conflicts         []string
 	Output            string
 }
+
+// PRMergeInfo is GitHub's current view of a PR and of the repository's
+// allowed merge methods (VORQ-020).
+type PRMergeInfo struct {
+	PR               PullRequest
+	Mergeable        string // MERGEABLE, CONFLICTING, UNKNOWN
+	MergeStateStatus string // CLEAN, BLOCKED, BEHIND, DIRTY, UNSTABLE, …
+	Methods          []string
+}
+
+// PRMergePlan is the reviewed merge: pinned to HeadOID; Blockers stop it.
+type PRMergePlan struct {
+	Number                                 int
+	Repository, Title, Head, Base, HeadOID string
+	Methods, Blockers                      []string
+	ChecksPassed, ChecksTotal              int
+}
+type PRMergeResult struct {
+	Plan   PRMergePlan
+	Method string
+}

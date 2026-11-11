@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Rafael-Albernaz-dev/vorq/internal/app"
 	"github.com/Rafael-Albernaz-dev/vorq/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -18,11 +19,18 @@ type branchDeletePlanMsg struct {
 
 // reviewBranchDelete opens the deletion review for the selected branch.
 func (m *Model) reviewBranchDelete() tea.Cmd {
-	if !m.canAct() || len(m.localBranches) == 0 {
+	if len(m.localBranches) == 0 {
+		return nil
+	}
+	return m.reviewBranchDeleteOf(m.localBranches[m.branchIndex].Name)
+}
+
+func (m *Model) reviewBranchDeleteOf(name string) tea.Cmd {
+	if !m.canAct() {
 		return nil
 	}
 	m.dialogID++
-	id, core, dir, name := m.dialogID, m.core, m.dir, m.localBranches[m.branchIndex].Name
+	id, core, dir := m.dialogID, m.core, m.dir
 	m.modal = modalBranchDelete
 	m.modalScroll = 0
 	m.branchDeletePlan = nil
@@ -59,13 +67,18 @@ func (m *Model) branchDeleteKey(key tea.KeyMsg) tea.Cmd {
 		}
 		m.dialogID++
 		m.modal, m.branchDeleteInput = modalBranches, ""
+		if m.prMerged != nil {
+			m.modal = ""
+		}
 		return nil
 	case tea.KeyEnter:
 		if p == nil || !m.canAct() {
 			return nil
 		}
 		confirmed := false
-		if p.NeedsConfirm() {
+		if m.prMerged != nil && app.MergedHeadCovers(*p, m.prMerged.HeadOID) {
+			confirmed = true // exactly the commit merged through the PR
+		} else if p.NeedsConfirm() {
 			if m.branchDeleteInput != domain.GuardOverrideWord {
 				m.notice = "Digite exatamente " + domain.GuardOverrideWord + " (maiúsculas) ou Esc para voltar."
 				return nil
@@ -84,7 +97,7 @@ func (m *Model) branchDeleteKey(key tea.KeyMsg) tea.Cmd {
 	case tea.KeyPgUp, tea.KeyUp:
 		m.modalScroll = max(0, m.modalScroll-1)
 	case tea.KeyRunes:
-		if p == nil || !p.NeedsConfirm() {
+		if p == nil || !m.branchDeleteNeedsTyping() {
 			return nil
 		}
 		for _, r := range key.Runes {
@@ -117,6 +130,11 @@ func (m *Model) deleteBranch(plan domain.BranchDeletePlan, confirmed bool) tea.C
 	}
 }
 
+func (m *Model) branchDeleteNeedsTyping() bool {
+	p := m.branchDeletePlan
+	return p != nil && p.NeedsConfirm() && (m.prMerged == nil || !app.MergedHeadCovers(*p, m.prMerged.HeadOID))
+}
+
 func shortHash(h string) string { return h[:min(12, len(h))] }
 
 func (m *Model) branchDeleteModal() (title, body, help, buttons string) {
@@ -143,7 +161,10 @@ func (m *Model) branchDeleteModal() (title, body, help, buttons string) {
 		body += "Sem branch remota conhecida localmente; só a local é apagada.\n"
 	}
 	body += fmt.Sprintf("\nO hash fica no resultado para recuperar: git branch %s %s", safeText(p.Branch), shortHash(p.Hash))
-	if p.NeedsConfirm() {
+	if m.prMerged != nil && app.MergedHeadCovers(*p, m.prMerged.HeadOID) {
+		body += fmt.Sprintf("\n\nA ponta da branch é exatamente o commit mergeado no PR #%d; nada se perde.", m.prMerged.Number)
+	}
+	if m.branchDeleteNeedsTyping() {
 		body += fmt.Sprintf("\n\nCommits podem se perder. Digite %s e Enter para apagar:\n> %s▏", domain.GuardOverrideWord, m.branchDeleteInput)
 		return title, body, "Digite " + domain.GuardOverrideWord + " · Enter apagar · Ctrl+U limpar · Esc voltar", "[Apagar] [Voltar]"
 	}

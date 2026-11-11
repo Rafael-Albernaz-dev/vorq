@@ -136,7 +136,9 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newAICmd(appCore), newPathCmd(appCore))
 	rootCmd.AddCommand(newRmCmd(appCore))
 	rootCmd.AddCommand(newPruneCmd(appCore))
-	rootCmd.AddCommand(newBranchCmd(appCore), newTreeCmd(appCore), newPRCmd(appCore))
+	prCmd := newPRCmd(appCore)
+	prCmd.AddCommand(newPRMergeCmd(appCore))
+	rootCmd.AddCommand(newBranchCmd(appCore), newTreeCmd(appCore), prCmd)
 
 	return rootCmd
 }

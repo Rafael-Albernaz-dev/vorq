@@ -178,9 +178,19 @@ func (r *prRepository) PublishedHead(context.Context, string, string, string, st
 }
 
 type fakePRProvider struct {
-	saved []domain.PRDraft
-	ready []int
-	view  *domain.PullRequest
+	saved  []domain.PRDraft
+	ready  []int
+	view   *domain.PullRequest
+	info   *domain.PRMergeInfo
+	merged []string
+}
+
+func (f *fakePRProvider) MergeInfo(context.Context, string, string, int) (*domain.PRMergeInfo, error) {
+	return f.info, nil
+}
+func (f *fakePRProvider) Merge(_ context.Context, _, repo string, number int, method, head string) error {
+	f.merged = append(f.merged, fmt.Sprintf("%s#%d %s %s", repo, number, method, head))
+	return nil
 }
 
 func (f *fakePRProvider) List(context.Context, string, string, domain.PRListOptions) ([]domain.PullRequest, error) {

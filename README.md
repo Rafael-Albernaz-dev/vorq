@@ -162,7 +162,8 @@ Requires `gh` installed and authenticated (`gh auth login`) and a `github.com` r
 - **List / view** (`P`) — PRs with state (`DRAFT` marked), checks, reviews and comments; `/` filters, `n` raises the limit up to 500. In history, `P` adds PR badges to commits and `v` finds PRs containing the selected commit.
 - **Create / edit** (`c` / `e` on the PR screen) — a form with title, description, base, labels, reviewers and draft state, a review step, and an explicit confirmation. Creation requires the current HEAD to be already published on the remote (use Push first); vorq never pushes implicitly.
 - **Write it with AI** — in the new-PR form press `Ctrl+G` or click **[IA]** (CLI: `vorq pr create --ai --provider claude`). The provider receives the branch commits and the per-file diff since the merge base with the locally known base (no fetch; up to 300 files and 2 MiB, files above 1 MiB replaced by a visible notice), the repository PR template when present and the tracked context documents. It writes an English title and a Markdown description (summary, motivation, changes, how to test, risks, breaking changes, reviewer notes) or fills your template, without claiming tests it cannot see. Only title and description are filled; a HEAD change during the analysis discards the result.
-- **Mark ready** — PRs are created as drafts by default and GitHub does not merge drafts. On the PR screen press `y` on an open draft (or run `vorq pr ready <number>`) and confirm to mark it ready for review. Merging stays on GitHub.
+- **Mark ready** — PRs are created as drafts by default and GitHub does not merge drafts. On the PR screen press `y` on an open draft (or run `vorq pr ready <number>`) and confirm to mark it ready for review.
+- **Merge** — on the PR screen press `M` (or run `vorq pr merge <number> [--method merge|squash|rebase]`). The review reads the PR on GitHub and lists every blocker: not open, draft, conflicts, GitHub still computing mergeability, changes requested or required review missing, failing or running checks, branch protection, or a base the branch is behind. A blocked PR is never forced (no `--admin`). Choose one of the methods the repository allows (`1`–`3`); the merge is pinned to the reviewed head commit (`--match-head-commit`), so new commits invalidate the review. The branch is not deleted automatically: the result offers `b` (switch to the base and update) and `d` (delete the PR branch locally and on the remote; no `CONFIRMAR` when its tip is exactly the merged commit).
 
 A failed or timed-out submission may still have reached GitHub; check the list before retrying.
 
@@ -236,6 +237,7 @@ vorq pr view <n>
 vorq pr create [--base main --title ... --body-file pr.md --draft=false] [--ai --provider claude]
 vorq pr edit <n> [--title ... --label bug --remove-label wip]
 vorq pr ready <n> [--yes]
+vorq pr merge <n> [--method squash] [--yes]  # reviewed merge; then offers base update and branch deletion
 
 vorq ai review [--provider codex|gemini|claude --model ...]
 vorq ai stage [--apply --yes]
@@ -306,7 +308,7 @@ Delivered:
 - **Worktree lifecycle** — `spawn`, safe `rm`, `prune`.
 - **Guided commits & safe discard**, **explicit push**, **fast-forward update**, **merge from the default branch**.
 - **Workspace Studio** — three-pane TUI, highlighting, mouse, themes, full-screen viewer, explicit refresh.
-- **Integrated Git flow** — repository link, branches (create, switch, delete), history graph, GitHub PRs (create, edit, mark ready).
+- **Integrated Git flow** — repository link, branches (create, switch, delete), history graph, GitHub PRs (create, edit, mark ready, merge).
 - **AI by subscription** — Codex, Gemini (Antigravity) and Claude Code for commit messages, reviews, next-commit staging advice, commit plans and PR descriptions.
 - **Hardening** — credential/GPG prompts kept out of the Studio, upstream-gone tolerance, lint gates in CI, explicit ports.
 - **Security checks** — secrets and conflict markers block commits and pushes (typed override), files with possible secrets never reach AI providers.

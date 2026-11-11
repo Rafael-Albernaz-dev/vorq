@@ -150,3 +150,54 @@ func (c *Client) Save(ctx context.Context, dir string, d domain.PRDraft) (string
 	}
 	return strings.TrimSpace(raw), nil
 }
+
+// MergeInfo reads the PR's mergeability and the repository's allowed methods.
+func (c *Client) MergeInfo(ctx context.Context, dir, repo string, number int) (*domain.PRMergeInfo, error) {
+	raw, e := c.Run(ctx, dir, "", "pr", "view", strconv.Itoa(number), "--repo", "github.com/"+repo, "--json", listFields+",mergeable,mergeStateStatus,statusCheckRollup")
+	if e != nil {
+		return nil, e
+	}
+	var data struct {
+		domain.PullRequest
+		Mergeable        string `json:"mergeable"`
+		MergeStateStatus string `json:"mergeStateStatus"`
+	}
+	if e = json.Unmarshal([]byte(raw), &data); e != nil {
+		return nil, fmt.Errorf("invalid PR JSON: %w", e)
+	}
+	if data.Number != number {
+		return nil, fmt.Errorf("returned PR differs from the requested one")
+	}
+	raw, e = c.Run(ctx, dir, "", "repo", "view", "github.com/"+repo, "--json", "mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed")
+	if e != nil {
+		return nil, e
+	}
+	var allowed struct{ MergeCommitAllowed, SquashMergeAllowed, RebaseMergeAllowed bool }
+	if e = json.Unmarshal([]byte(raw), &allowed); e != nil {
+		return nil, fmt.Errorf("invalid repository JSON: %w", e)
+	}
+	info := &domain.PRMergeInfo{PR: data.PullRequest, Mergeable: data.Mergeable, MergeStateStatus: data.MergeStateStatus}
+	for _, m := range []struct {
+		ok   bool
+		name string
+	}{{allowed.MergeCommitAllowed, "merge"}, {allowed.SquashMergeAllowed, "squash"}, {allowed.RebaseMergeAllowed, "rebase"}} {
+		if m.ok {
+			info.Methods = append(info.Methods, m.name)
+		}
+	}
+	return info, nil
+}
+
+// Merge merges the PR only if its head is still headOID. It never uses
+// --admin, --auto or --delete-branch.
+func (c *Client) Merge(ctx context.Context, dir, repo string, number int, method, headOID string) error {
+	switch method {
+	case "merge", "squash", "rebase":
+	default:
+		return fmt.Errorf("invalid merge method %q", method)
+	}
+	if _, e := c.Run(ctx, dir, "", "pr", "merge", strconv.Itoa(number), "--repo", "github.com/"+repo, "--"+method, "--match-head-commit", headOID); e != nil {
+		return fmt.Errorf("merge was not confirmed by GitHub; check the PR before retrying: %w", e)
+	}
+	return nil
+}

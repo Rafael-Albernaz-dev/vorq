@@ -75,6 +75,9 @@ type dialogState struct {
 	syncTarget                        *domain.SyncTarget
 	branchDeletePlan                  *domain.BranchDeletePlan
 	branchDeleteInput                 string
+	prMergePlan                       *domain.PRMergePlan
+	prMergeMethod                     int
+	prMerged                          *domain.PRMergePlan // last PR merged here: cleanup offers
 	worktrees                         []*domain.Workspace
 	worktreeIndex                     int
 }

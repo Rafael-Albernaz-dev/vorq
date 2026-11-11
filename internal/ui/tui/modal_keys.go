@@ -126,7 +126,12 @@ func (m *Model) handleModalKey(key tea.KeyMsg) tea.Cmd {
 			m.modal = ""
 			return m.stage()
 		}
+	case modalPRMerge:
+		return m.prMergeKey(s)
 	case modalHelp, modalError, modalResult:
+		if m.modal == modalResult && m.resultKind == "pr-merge" && (s == "b" || s == "d") {
+			return m.postMergeKey(s)
+		}
 		if m.modal == modalError && s == "t" && m.terminalRetryKind != "" {
 			return m.retryInTerminal()
 		}

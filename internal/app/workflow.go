@@ -27,6 +27,10 @@ type PullRequestProvider interface {
 	Save(context.Context, string, domain.PRDraft) (string, error)
 	DefaultBranch(context.Context, string, string) (string, error)
 	Ready(context.Context, string, string, int) error
+	// MergeInfo/Merge (VORQ-020): Merge is pinned to the reviewed head commit
+	// and never bypasses protections (no --admin, --auto or --delete-branch).
+	MergeInfo(context.Context, string, string, int) (*domain.PRMergeInfo, error)
+	Merge(context.Context, string, string, int, string, string) error
 }
 type WorkflowService interface {
 	GetRepositoryLink(context.Context, string) (*domain.RepositoryLink, error)

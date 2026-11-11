@@ -89,3 +89,21 @@ func TestDeleteRemoteLeaseProtectsNewRemoteCommits(t *testing.T) {
 		t.Fatal("local branch deleted after remote failure")
 	}
 }
+
+func TestDeleteBranchAlreadyGoneOnRemote(t *testing.T) {
+	a, r, dir, remote := seedPull(t)
+	ctx := context.Background()
+	runCmd(t, dir, "git", "branch", "feat/auto")
+	runCmd(t, dir, "git", "push", "-q", "-u", "origin", "feat/auto")
+	runCmd(t, remote, "git", "branch", "-D", "feat/auto") // GitHub auto-delete
+	plan, err := a.PrepareBranchDelete(ctx, dir, "feat/auto")
+	if err != nil || plan.RemoteHash == "" {
+		t.Fatalf("plan %+v %v", plan, err)
+	}
+	if _, err := a.DeleteBranch(ctx, dir, *plan, false); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := r.Exec(ctx, dir, "for-each-ref", "refs/remotes/origin/feat/auto", "refs/heads/feat/auto"); strings.TrimSpace(out) != "" {
+		t.Fatalf("refs kept: %q", out)
+	}
+}
