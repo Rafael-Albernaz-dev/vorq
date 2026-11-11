@@ -3,8 +3,9 @@
 [![Go Version](https://img.shields.io/badge/go-1.27%2B-blue.svg)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/Rafael-Albernaz-dev/vorq/actions/workflows/ci.yml/badge.svg)](https://github.com/Rafael-Albernaz-dev/vorq/actions)
+[![Release](https://img.shields.io/badge/release-v0.1.0%20MVP-orange.svg)](https://github.com/Rafael-Albernaz-dev/vorq/releases/tag/v0.1.0)
 
-**A terminal workspace studio and Git companion in Go.** Browse files, read syntax-highlighted diffs, stage per file, write and review commits (with optional AI from your own subscriptions), manage worktrees, branches, history and GitHub pull requests — all from one keyboard- and mouse-friendly TUI, or from scriptable CLI commands that share the same core.
+**A terminal workspace studio and Git companion in Go.** Browse files, read syntax-highlighted diffs, stage per file, write and review commits (with optional AI from your own subscriptions), keep secrets out of commits, pushes and AI, manage worktrees, branches (merge, rebase, cherry-pick, delete), history and GitHub pull requests (create, review, merge) — all from one keyboard- and mouse-friendly TUI, or from scriptable CLI commands that share the same core.
 
 ---
 
@@ -36,7 +37,8 @@ Measured on this repository with the release binary: `vorq list` finishes in abo
 
 Principles:
 
-- **Explicit over implicit** — nothing is pushed, fetched, stashed, discarded or committed without an action you confirm.
+- **Explicit over implicit** — nothing is pushed, fetched, merged, rebased, deleted, stashed, discarded or committed without an action you confirm.
+- **Never force** — no force push, no `--admin` merges; history is rewritten only for commits that were never published.
 - **Git is the source of truth** — status, worktrees and history always come from `git` itself (`--porcelain -z`).
 - **One core, two interfaces** — the CLI and the TUI call the same use cases in `internal/app`.
 
@@ -47,7 +49,7 @@ Principles:
 Requirements: **Go 1.27+**, `git`, and a C compiler (GCC or Clang) because the embedded Tree-sitter parsers use CGO. Optional: [`gh`](https://cli.github.com/) for pull requests, `wl-copy` or `xclip`/`xsel` for copying paths, and the official AI CLIs listed in [AI features](#ai-features).
 
 ```bash
-go install github.com/Rafael-Albernaz-dev/vorq/cmd/vorq@latest
+go install github.com/Rafael-Albernaz-dev/vorq/cmd/vorq@v0.1.0   # or @latest
 ```
 
 From source:
@@ -263,7 +265,9 @@ Every command that writes (commit, push, pull, switch, PR, plan execution, stage
 ## Safety model
 
 - No implicit network: fetch, push and GitHub calls only run from explicit actions.
-- No implicit history changes: no stash, reset, rebase, force push or merge commits.
+- No implicit history changes: no stash, reset or force push, ever. Merges, rebases, cherry-picks and branch deletions only run after a review you confirm; rebase is limited to unpublished commits, deleting unmerged work needs a typed `CONFIRMAR`, and remote deletions are pinned with `--force-with-lease`.
+- Stopped operations (merge, cherry-pick, rebase) are never left ambiguous: the Studio and CLI list the conflicts and offer continue or abort.
+- PR merges are pinned to the reviewed head commit and blocked by failing or running checks, missing reviews, drafts, conflicts and branch protection.
 - Reviewed state is re-validated before writing (stage diff, HEAD, push destination, plan snapshot, discard fingerprint); anything that changed requires a new review.
 - Read-only Studio queries use `--no-optional-locks` and never rewrite `.git/index`.
 - Ignored and sensitive files are protected from discard, worktree removal and AI input.
@@ -309,18 +313,22 @@ CI runs the same gates on every push and pull request. Tests use real temporary 
 
 ## Roadmap
 
-Delivered:
+### v0.1.0 — MVP (11/11/2026)
+
+The first complete version. Delivered:
 
 - **Foundation & discovery** — core, porcelain parsers, worktree inspection.
 - **Worktree lifecycle** — `spawn`, safe `rm`, `prune`.
-- **Guided commits & safe discard**, **explicit push**, **fast-forward update**, **merge from the default branch**, **rebase of unpublished commits**, **cherry-pick**, with continue/abort on conflicts.
-- **Workspace Studio** — three-pane TUI, highlighting, mouse, themes, full-screen viewer, explicit refresh.
-- **Integrated Git flow** — repository link, branches (create, switch, delete), history graph, GitHub PRs (create, edit, mark ready, merge).
+- **Workspace Studio** — three-pane TUI, syntax highlighting, mouse, themes, full-screen viewer, explicit refresh.
+- **Commits** — guided commits, per-file stage, safe discard, commit plans.
+- **Sync** — explicit push, fast-forward update, *Trazer main* (merge from the default branch), rebase of unpublished commits, cherry-pick, continue/abort on conflicts.
+- **Branches & history** — create, switch and delete (local + remote), history graph with search and patch previews.
+- **GitHub PRs** — list, view, create, edit, write with AI, mark ready and merge with review of checks and protections, plus post-merge cleanup.
 - **AI by subscription** — Codex, Gemini (Antigravity) and Claude Code for commit messages, reviews, next-commit staging advice, commit plans and PR descriptions.
+- **Security checks** — secrets and conflict markers block commits and pushes (typed override); files with possible secrets never reach AI providers.
 - **Hardening** — credential/GPG prompts kept out of the Studio, upstream-gone tolerance, lint gates in CI, explicit ports.
-- **Security checks** — secrets and conflict markers block commits and pushes (typed override), files with possible secrets never reach AI providers.
 
-Not planned for now: hunk-level staging, local LLMs.
+Not planned for now: hunk-level staging, interactive rebase (reorder/squash), local LLMs.
 
 ---
 
